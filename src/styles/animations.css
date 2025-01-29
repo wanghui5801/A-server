@@ -1,0 +1,67 @@
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-down {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+@keyframes modal-fade-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes elegant-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes elegant-pulse {
+  0% { opacity: 0.4; transform: scale(0.98); }
+  50% { opacity: 0.8; transform: scale(1); }
+  100% { opacity: 0.4; transform: scale(0.98); }
+}
+
+@keyframes track-pulse {
+  0% { stroke-opacity: 0.1; }
+  50% { stroke-opacity: 0.2; }
+  100% { stroke-opacity: 0.1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out forwards;
+  opacity: 0;
+}
+
+.animate-slide-down {
+  animation: slide-down 0.5s ease-out;
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+.modal-enter {
+  animation: modal-fade-in 0.3s ease-out;
+}
+
+.loading-spinner {
+  animation: elegant-rotate 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  filter: drop-shadow(0 0 2px currentColor);
+}
+
+.loading-track {
+  animation: track-pulse 2s ease-in-out infinite;
+}
+
+.loading-pulse {
+  animation: elegant-pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+} 
