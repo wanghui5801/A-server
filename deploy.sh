@@ -75,10 +75,18 @@ setup_env() {
     # 获取服务器IP
     SERVER_IP=$(curl -s http://ipinfo.io/ip)
     
-    # 创建或更新.env文件
+    # 创建或更新前端 .env 文件
     cat > .env << EOF
-PUBLIC_API_URL=http://${SERVER_IP}:5000
+PUBLIC_API_URL=/api
+VITE_API_URL=/api
 NODE_ENV=production
+EOF
+
+    # 创建或更新后端 .env 文件
+    cat > .env.production << EOF
+NODE_ENV=production
+PORT=3000
+PUBLIC_API_URL=http://${SERVER_IP}:5000
 EOF
 
     # 创建或更新 astro.config.mjs
@@ -95,7 +103,7 @@ export default defineConfig({
   },
   vite: {
     define: {
-      'process.env.PUBLIC_API_URL': JSON.stringify(process.env.PUBLIC_API_URL)
+      'process.env.PUBLIC_API_URL': JSON.stringify('/api')
     }
   }
 });
@@ -149,6 +157,67 @@ build_project() {
     sudo chown -R $USER:$USER dist
 }
 
+# 配置 PM2
+setup_pm2() {
+    echo "配置 PM2..."
+    
+    # 创建 PM2 配置文件
+    tee ecosystem.config.js > /dev/null <<EOF
+module.exports = {
+  apps: [
+    {
+      name: 'astro-monitor-server',
+      script: './dist/server/index.js',
+      instances: 1,
+      exec_mode: 'cluster',
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '1G',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3000,
+        PUBLIC_API_URL: 'http://${SERVER_IP}:5000'
+      },
+      error_file: "./logs/server-err.log",
+      out_file: "./logs/server-out.log",
+      log_date_format: "YYYY-MM-DD HH:mm:ss",
+      merge_logs: true,
+      node_args: '--max-old-space-size=2048'
+    },
+    {
+      name: 'astro-monitor-frontend',
+      script: 'npx',
+      args: 'serve dist -l 4321',
+      instances: 1,
+      exec_mode: 'cluster',
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '500M',
+      env: {
+        NODE_ENV: 'production',
+        PUBLIC_API_URL: '/api'
+      },
+      error_file: "./logs/frontend-err.log",
+      out_file: "./logs/frontend-out.log",
+      log_date_format: "YYYY-MM-DD HH:mm:ss",
+      merge_logs: true
+    }
+  ]
+}
+EOF
+
+    # 安装serve包用于托管静态文件
+    npm install -g serve
+
+    # 启动服务
+    pm2 delete all 2>/dev/null || true
+    pm2 start ecosystem.config.js
+    
+    # 保存 PM2 配置，确保服务器重启后自动启动
+    pm2 save
+    sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u $USER --hp /home/$USER
+}
+
 # 配置 Nginx
 setup_nginx() {
     echo "配置 Nginx..."
@@ -168,7 +237,8 @@ events {
 }
 
 http {
-    sendfile on;··    tcp_nopush on;
+    sendfile on;
+    tcp_nopush on;
     tcp_nodelay on;
     keepalive_timeout 65;
     types_hash_max_size 2048;
@@ -199,13 +269,18 @@ map \$http_upgrade \$connection_upgrade {
     '' close;
 }
 
+upstream frontend {
+    server localhost:4321;
+}
+
+upstream backend {
+    server localhost:3000;
+}
+
 server {
     listen 5000 default_server;
     server_name _;
     client_max_body_size 50M;
-
-    # 前端静态文件
-    root $(pwd)/dist;
     
     # 全局 CORS 设置
     add_header 'Access-Control-Allow-Origin' '*' always;
@@ -213,16 +288,9 @@ server {
     add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
     add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
 
-    # 静态文件缓存
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-        expires 30d;
-        add_header Cache-Control "public, no-transform";
-        try_files \$uri =404;
-    }
-
     # API 请求
     location /api/ {
-        proxy_pass http://localhost:3000/;
+        proxy_pass http://backend/;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -239,7 +307,7 @@ server {
 
     # WebSocket 连接
     location /socket.io/ {
-        proxy_pass http://localhost:3000/socket.io/;
+        proxy_pass http://backend/socket.io/;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -252,14 +320,21 @@ server {
         proxy_buffering off;
     }
 
-    # 所有其他请求返回 index.html
+    # 前端请求
     location / {
-        try_files \$uri \$uri/ /index.html;
-        add_header X-Frame-Options "SAMEORIGIN" always;
-        add_header X-XSS-Protection "1; mode=block" always;
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header Referrer-Policy "no-referrer-when-downgrade" always;
-        add_header Content-Security-Policy "default-src 'self' http: https: ws: wss: data: blob: 'unsafe-inline' 'unsafe-eval'" always;
+        proxy_pass http://frontend;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        
+        # 静态文件缓存
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            proxy_pass http://frontend;
+            expires 30d;
+            add_header Cache-Control "public, no-transform";
+        }
     }
 }
 EOF
@@ -275,50 +350,12 @@ EOF
     sudo systemctl restart nginx
 }
 
-# 配置 PM2
-setup_pm2() {
-    echo "配置 PM2..."
-    
-    # 创建 PM2 配置文件
-    tee ecosystem.config.js > /dev/null <<EOF
-module.exports = {
-  apps: [{
-    name: 'astro-monitor-server',
-    script: './dist/server/index.js',
-    instances: 1,
-    exec_mode: 'cluster',
-    autorestart: true,
-    watch: false,
-    max_memory_restart: '1G',
-    env: {
-      NODE_ENV: 'production',
-      PORT: 3000,
-      PUBLIC_API_URL: 'http://${SERVER_IP}:5000'
-    },
-    error_file: "./logs/err.log",
-    out_file: "./logs/out.log",
-    log_date_format: "YYYY-MM-DD HH:mm:ss",
-    merge_logs: true,
-    node_args: '--max-old-space-size=2048'
-  }]
-}
-EOF
-
-    # 启动服务
-    pm2 delete astro-monitor-server 2>/dev/null || true
-    pm2 start ecosystem.config.js
-    
-    # 保存 PM2 配置，确保服务器重启后自动启动
-    pm2 save
-    sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u $USER --hp /home/$USER
-}
-
 # 检查服务状态
 check_service() {
     echo "检查服务状态..."
     
     # 检查 PM2 服务状态
-    if ! pm2 list | grep -q "astro-monitor-server"; then
+    if ! pm2 list | grep -q "astro-monitor-server\|astro-monitor-frontend"; then
         echo "错误: PM2 服务未正常运行"
         exit 1
     fi
@@ -339,6 +376,11 @@ check_service() {
         echo "错误: 3000 端口未正常监听"
         exit 1
     fi
+
+    if ! netstat -tuln | grep -q ":4321 "; then
+        echo "错误: 4321 端口未正常监听"
+        exit 1
+    fi
     
     echo "所有服务正常运行！"
 }
@@ -357,12 +399,15 @@ main() {
     check_service
     
     echo "部署完成！"
-    echo "服务已经在 5000 端口启动"
-    echo "可以通过 http://${SERVER_IP}:5000 访问"
+    echo "服务已经在以下端口启动："
+    echo "- 主入口：http://${SERVER_IP}:5000"
+    echo "- 后端服务：http://${SERVER_IP}:3000"
+    echo "- 前端服务：http://${SERVER_IP}:4321"
     echo ""
     echo "查看服务状态："
-    echo "后端服务：pm2 status"
+    echo "所有服务：pm2 status"
     echo "后端日志：pm2 logs astro-monitor-server"
+    echo "前端日志：pm2 logs astro-monitor-frontend"
     echo "Nginx 状态：sudo systemctl status nginx"
     echo "Nginx 错误日志：sudo tail -f /var/log/nginx/error.log"
     echo "Nginx 访问日志：sudo tail -f /var/log/nginx/access.log"
