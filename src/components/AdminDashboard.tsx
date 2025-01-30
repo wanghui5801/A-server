@@ -584,6 +584,8 @@ const AdminDashboard: React.FC = () => {
   const [isSSHModalOpen, setIsSSHModalOpen] = useState(false);
   const [selectedSSHClient, setSelectedSSHClient] = useState<{ hostname: string; ip: string } | null>(null);
   const [connected, setConnected] = useState(false);
+  const [copySuccess, setCopySuccess] = useState<string>('');
+  const [serverPublicIP, setServerPublicIP] = useState<string>('');
 
   const fetchClients = useCallback(async () => {
     try {
@@ -624,6 +626,44 @@ const AdminDashboard: React.FC = () => {
       setError('Failed to fetch Ping configuration');
     }
   }, []);
+
+  const fetchServerIP = useCallback(async () => {
+    try {
+      const response = await fetch(`${getApiUrl()}/api/server-info`, {
+        headers: {
+          'X-Internal-Request': 'true',
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        if (response.status === 403) {
+          throw new Error('Unauthorized access to server info');
+        }
+        throw new Error('Failed to fetch server info');
+      }
+      
+      const data = await response.json();
+      if (!data.public_ip) {
+        throw new Error('Server IP not available');
+      }
+      setServerPublicIP(data.public_ip);
+      setError(''); // Clear any previous errors
+    } catch (err) {
+      console.error('Error fetching server IP:', err);
+      setError('Failed to fetch server IP');
+      setServerPublicIP(''); // Reset server IP on error
+    }
+  }, []);
+
+  // Ensure we fetch the server IP periodically
+  useEffect(() => {
+    fetchServerIP(); // Initial fetch
+    const serverIPInterval = setInterval(fetchServerIP, 30000); // Refresh every 30 seconds
+    
+    return () => clearInterval(serverIPInterval);
+  }, [fetchServerIP]);
 
   // Initialize socket event listeners when component mounts
   useEffect(() => {
@@ -931,6 +971,49 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const copySetupCommand = async (hostname: string) => {
+    try {
+      if (!serverPublicIP) {
+        // If server IP is not available, try to fetch it again
+        await fetchServerIP();
+        if (!serverPublicIP) {
+          throw new Error('Server IP not available. Please try again in a few moments.');
+        }
+      }
+      
+      const setupCommand = `curl -L https://raw.githubusercontent.com/wanghui5801/A-server/main/setup-client.sh -o setup-client.sh && chmod +x setup-client.sh && ./setup-client.sh ${hostname} ${serverPublicIP}`;
+      
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(setupCommand);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = setupCommand;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+          const success = document.execCommand('copy');
+          if (!success) {
+            throw new Error('Failed to copy command');
+          }
+        } finally {
+          textArea.remove();
+        }
+      }
+      
+      setCopySuccess(hostname);
+      setTimeout(() => setCopySuccess(''), 2000);
+    } catch (err) {
+      console.error('Failed to copy command:', err);
+      setError(err instanceof Error ? err.message : 'Failed to copy command');
+      setCopySuccess('');
+    }
+  };
+
   if (!isAuthenticated) {
     return <AdminLogin onLoginSuccess={() => setIsAuthenticated(true)} />;
   }
@@ -1026,6 +1109,27 @@ const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => copySetupCommand(client.hostname)}
+                      className="bg-green-500/80 text-white px-2 py-0.5 rounded-md text-xs hover:bg-green-400 transition-colors font-medium tracking-wide flex items-center space-x-1"
+                      title="Copy setup command"
+                    >
+                      {copySuccess === client.hostname ? (
+                        <>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                          </svg>
+                          <span>Setup</span>
+                        </>
+                      )}
+                    </button>
                     <input
                       type="number"
                       value={client.sort_order}
@@ -1093,6 +1197,27 @@ const AdminDashboard: React.FC = () => {
               <div className="hidden sm:flex sm:items-center sm:justify-between w-full">
                 <div className="flex items-center space-x-4">
                   <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => copySetupCommand(client.hostname)}
+                      className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-400 transition-colors flex items-center space-x-1"
+                      title="Copy setup command"
+                    >
+                      {copySuccess === client.hostname ? (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                          </svg>
+                          <span>Setup</span>
+                        </>
+                      )}
+                    </button>
                     <input
                       type="number"
                       value={client.sort_order}

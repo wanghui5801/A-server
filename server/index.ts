@@ -20,7 +20,7 @@ const app = express();
 app.use(cors({
   origin: true, // Allow all origins
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Internal-Request'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Internal-Request', 'X-Auth-Token'],
   credentials: true,
   maxAge: 86400
 }));
@@ -159,6 +159,19 @@ function setupDatabaseCleanup() {
 
 // Call setupDatabaseCleanup after database initialization
 db.serialize(() => {
+  // Create server_info table for caching server information
+  db.run(`CREATE TABLE IF NOT EXISTS server_info (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    updated_at INTEGER
+  )`, (err) => {
+    if (err) {
+      logger.error('Error creating server_info table:', err);
+    } else {
+      logger.info('Server info table ready');
+    }
+  });
+
   // First, check if we need to add the public_ip column to monitored_clients
   db.run(`ALTER TABLE monitored_clients ADD COLUMN public_ip TEXT`, (err) => {
     // Ignore error if column already exists
@@ -177,7 +190,7 @@ db.serialize(() => {
       logger.error('Error creating monitored_clients table:', err);
     } else {
       logger.info('Monitored clients table ready');
-  }
+    }
   });
 
   // First, check if we need to add the public_ip column to clients
@@ -1061,14 +1074,14 @@ app.get('/api/clients', async (req, res) => {
           WHERE hostname = mc.hostname
         ) as tags,
         COALESCE(
-        (
-          SELECT json_group_array(
-            json_object(
-              'timestamp', ph.timestamp,
-              'latency', CAST(ph.latency as REAL),
-              'target', ph.target
+          (
+            SELECT json_group_array(
+              json_object(
+                'timestamp', ph.timestamp,
+                'latency', CAST(ph.latency as REAL),
+                'target', ph.target
+              )
             )
-          )
             FROM ping_history ph
             WHERE ph.hostname = mc.hostname
             AND ph.timestamp > ?
@@ -1085,7 +1098,7 @@ app.get('/api/clients', async (req, res) => {
           HAVING MAX(lastSeen)
         )
         ORDER BY hostname
-      ) c ON c.hostname = mc.hostname
+        ) c ON c.hostname = mc.hostname
       LEFT JOIN LastOnlineData lod ON lod.hostname = mc.hostname
       ORDER BY 
         CASE 
@@ -1156,12 +1169,12 @@ app.get('/api/clients', async (req, res) => {
 
         // Only add IP information in internal requests
         if (isInternalRequest) {
-        return {
+          return {
             ...responseObj,
             ip: row.ip,
             public_ip: row.public_ip,
             country_code: row.country_code
-        };
+          };
         }
 
         return responseObj;
@@ -1218,7 +1231,7 @@ app.get('/api/monitored-clients', (req, res) => {
         GROUP BY hostname
         HAVING MAX(lastSeen)
       )
-    ) c ON c.hostname = mc.hostname
+      ) c ON c.hostname = mc.hostname
     ORDER BY mc.sort_order DESC, mc.created_at ASC
   `;
 
@@ -1825,7 +1838,130 @@ db.serialize(() => {
   db.run('CREATE INDEX IF NOT EXISTS idx_clients_status ON clients(status)');
 });
 
+// Add server info endpoint
+app.get('/api/server-info', async (req, res) => {
+  try {
+    // Check if this is an internal request from AdminDashboard
+    const isInternalRequest = req.headers['x-internal-request'] === 'true';
+
+    if (!isInternalRequest) {
+      return res.status(403).json({ error: 'Unauthorized access' });
+    }
+
+    // Create server_info table if it doesn't exist (failsafe)
+    await new Promise((resolve, reject) => {
+      db.run(`CREATE TABLE IF NOT EXISTS server_info (
+        key TEXT PRIMARY KEY,
+        value TEXT,
+        updated_at INTEGER
+      )`, (err) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
+
+    // Check if there's a cached IP that's less than 5 minutes old
+    const cacheTimeout = 5 * 60 * 1000; // 5 minutes
+    const cachedIP = await new Promise<ServerInfoRow | null>((resolve, reject) => {
+      db.get(
+        'SELECT value, updated_at FROM server_info WHERE key = ? AND (? - updated_at) < ?',
+        ['public_ip', Date.now(), cacheTimeout],
+        (err, row) => {
+          if (err) {
+            logger.error('Error querying cached IP:', err);
+            resolve(null);
+          } else {
+            resolve(row as ServerInfoRow | null);
+          }
+        }
+      );
+    });
+
+    if (cachedIP?.value) {
+      logger.info('Using cached IP:', cachedIP.value);
+      return res.json({ public_ip: cachedIP.value });
+    }
+
+    // Try multiple IP lookup services in sequence
+    const ipServices = [
+      'https://api.ipify.org?format=json',
+      'https://api.ip.sb/ip',
+      'https://api.myip.com'
+    ];
+
+    let publicIP = null;
+    let lastError = null;
+
+    for (const service of ipServices) {
+      try {
+        logger.info('Trying IP service:', service);
+        const response = await fetch(service);
+        if (!response.ok) {
+          logger.warn(`Service ${service} returned status ${response.status}`);
+          continue;
+        }
+        
+        const data = await response.text();
+        // Handle different response formats
+        if (service.includes('ipify')) {
+          const jsonData = JSON.parse(data);
+          publicIP = jsonData.ip;
+        } else if (service.includes('ip.sb')) {
+          publicIP = data.trim();
+        } else if (service.includes('myip.com')) {
+          const jsonData = JSON.parse(data);
+          publicIP = jsonData.ip;
+        }
+
+        if (publicIP) {
+          logger.info('Successfully obtained IP from', service);
+          break;
+        }
+      } catch (e) {
+        lastError = e;
+        logger.warn(`Failed to fetch IP from ${service}:`, e);
+        continue;
+      }
+    }
+
+    if (!publicIP) {
+      logger.error('Failed to fetch public IP from all services:', lastError);
+      return res.status(500).json({ error: 'Failed to fetch server public IP' });
+    }
+
+    // Cache the IP
+    const timestamp = Date.now();
+    try {
+      await new Promise((resolve, reject) => {
+        db.run(
+          'INSERT OR REPLACE INTO server_info (key, value, updated_at) VALUES (?, ?, ?)',
+          ['public_ip', publicIP, timestamp],
+          (err) => {
+            if (err) reject(err);
+            else resolve(null);
+          }
+        );
+      });
+      logger.info('Successfully cached IP:', publicIP);
+    } catch (err) {
+      logger.error('Failed to cache IP:', err);
+      // Even if caching fails, we can still return the IP
+    }
+
+    res.json({ public_ip: publicIP });
+  } catch (error) {
+    logger.error('Error in /api/server-info endpoint:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {
   logger.info(`Server running on port ${PORT}`);
 });
+
+// Add type definition for server info row
+interface ServerInfoRow {
+  value: string;
+  updated_at: number;
+}
