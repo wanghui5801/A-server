@@ -154,34 +154,105 @@ interface SystemInfo {
 }
 
 // Get CPU usage
-let lastCpuInfo: { idle: number; total: number }[] | null = null;
+interface CpuInfo {
+  user: number;
+  nice: number;
+  sys: number;
+  idle: number;
+  irq: number;
+}
+
+let lastCpuInfo: CpuInfo | null = null;
 
 async function getCpuUsage(): Promise<number> {
-  const cpus = os.cpus();
-  
-  // Calculate CPU usage for each core
-  const cpuUsage = cpus.map(cpu => {
-    // Calculate total time spent in all states
-    const total = Object.values(cpu.times).reduce((acc, time) => acc + time, 0);
+  try {
+    // Read /proc/stat for more accurate CPU usage
+    const statContent = await fs.promises.readFile('/proc/stat', 'utf8');
+    const cpuLines = statContent.split('\n').filter(line => line.startsWith('cpu'));
     
-    // Calculate non-idle time (total - idle)
-    const active = total - cpu.times.idle;
+    // Get the aggregate CPU line (cpu ...)
+    const cpuLine = cpuLines[0];
+    const values = cpuLine.split(/\s+/).slice(1).map(Number);
     
-    // Calculate percentage of time spent active
-    return (active / total) * 100;
-  });
-
-  // Calculate average CPU usage across all cores
-  const averageUsage = cpuUsage.reduce((acc, usage) => acc + usage, 0) / cpus.length;
-  return Math.round(averageUsage * 100) / 100;
+    const current: CpuInfo = {
+      user: values[0],
+      nice: values[1],
+      sys: values[2],
+      idle: values[3],
+      irq: values[6]
+    };
+    
+    if (!lastCpuInfo) {
+      lastCpuInfo = current;
+      // Wait a short interval for the first measurement
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return getCpuUsage();
+    }
+    
+    // Calculate deltas
+    const userDiff = current.user - lastCpuInfo.user;
+    const niceDiff = current.nice - lastCpuInfo.nice;
+    const sysDiff = current.sys - lastCpuInfo.sys;
+    const idleDiff = current.idle - lastCpuInfo.idle;
+    const irqDiff = current.irq - lastCpuInfo.irq;
+    
+    // Calculate total time difference
+    const totalDiff = userDiff + niceDiff + sysDiff + idleDiff + irqDiff;
+    
+    // Calculate CPU usage percentage
+    const cpuUsage = totalDiff > 0 ? 
+      ((totalDiff - idleDiff) / totalDiff) * 100 : 0;
+    
+    // Update last info for next calculation
+    lastCpuInfo = current;
+    
+    return Math.round(cpuUsage * 100) / 100;
+  } catch (error) {
+    // Fallback to os.cpus() if /proc/stat is not available
+    const cpus = os.cpus();
+    const avgUsage = cpus.reduce((acc, cpu) => {
+      const total = Object.values(cpu.times).reduce((a, b) => a + b);
+      const idle = cpu.times.idle;
+      return acc + ((total - idle) / total) * 100;
+    }, 0) / cpus.length;
+    
+    return Math.round(avgUsage * 100) / 100;
+  }
 }
 
 // Get memory usage
 async function getMemoryUsage(): Promise<number> {
-  const totalMemory = os.totalmem();
-  const freeMemory = os.freemem();
-  const memoryUsage = ((totalMemory - freeMemory) / totalMemory) * 100;
-  return Math.round(memoryUsage * 100) / 100;
+  try {
+    // Read /proc/meminfo for more accurate memory information
+    const memContent = await fs.promises.readFile('/proc/meminfo', 'utf8');
+    const memInfo: { [key: string]: number } = {};
+    
+    memContent.split('\n').forEach(line => {
+      const matches = line.match(/^(\w+):\s+(\d+)/);
+      if (matches) {
+        memInfo[matches[1]] = parseInt(matches[2]);
+      }
+    });
+    
+    // Calculate actual used memory (similar to htop)
+    const total = memInfo['MemTotal'] || 0;
+    const free = memInfo['MemFree'] || 0;
+    const buffers = memInfo['Buffers'] || 0;
+    const cached = memInfo['Cached'] || 0;
+    const sReclaimable = memInfo['SReclaimable'] || 0;
+    
+    // Used = Total - Free - Buffers - (Cached + SReclaimable)
+    const used = total - free - buffers - (cached + sReclaimable);
+    const usagePercentage = (used / total) * 100;
+    
+    return Math.round(usagePercentage * 100) / 100;
+  } catch (error) {
+    // Fallback to os.freemem() if /proc/meminfo is not available
+    const totalMemory = os.totalmem();
+    const freeMemory = os.freemem();
+    const usagePercentage = ((totalMemory - freeMemory) / totalMemory) * 100;
+    return Math.round(usagePercentage * 100) / 100;
+  }
 }
 
 // Get disk usage
