@@ -1,7 +1,9 @@
 {
-  "name": "server-monitor",
+  "name": "astro-monitor",
   "type": "module",
-  "version": "0.0.1",
+  "version": "1.0.0",
+  "description": "A comprehensive server monitoring system built with Astro + React",
+  "main": "server/index.ts",
   "scripts": {
     "dev": "astro dev",
     "start": "node dist/server/entry.mjs",
@@ -77,9 +79,25 @@
     "tsx": "^4.7.1",
     "typescript": "^5.7.3"
   },
-  "description": "```sh npm create astro@latest -- --template basics ```",
-  "main": "index.js",
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  "keywords": [
+    "server-monitoring",
+    "astro",
+    "react",
+    "typescript",
+    "nodejs",
+    "realtime",
+    "dashboard"
+  ],
+  "author": "Hui Wang",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wanghui5801/A-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wanghui5801/A-server/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
 }
