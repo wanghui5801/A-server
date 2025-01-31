@@ -1,11 +1,6 @@
 <div align="center">
   <div style="margin-bottom: 20px">
-    <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="var(--color-fg-default, #24292f)" style="color: var(--color-fg-default, #24292f)" xmlns="http://www.w3.org/2000/svg">
-      <style>
-        @media (prefers-color-scheme: dark) {
-          svg { stroke: var(--color-fg-default, #c9d1d9) }
-        }
-      </style>
+    <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6.5 12h2l2-6 3 18 2.5-12h2">
         <animate attributeName="opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite"/>
       </path>
