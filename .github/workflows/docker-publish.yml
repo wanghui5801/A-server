@@ -9,6 +9,8 @@ on:
       - 'LICENSE'
   pull_request:
     branches: [ "main" ]
+  # Enable manual trigger
+  workflow_dispatch:
 
 env:
   # Update with your DockerHub username/repository
