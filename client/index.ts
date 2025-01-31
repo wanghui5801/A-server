@@ -101,15 +101,15 @@ const log = logger;
 
 // Parse command line arguments
 const args = process.argv.slice(2);
-const serverAddress = args[0] || 'localhost:3000';
-const customHostname = args[1] || os.hostname();
+const serverAddress = args[0]?.replace(/^"|"$/g, '') || 'localhost:3000';
+const customHostname = args[1]?.replace(/^"|"$/g, '') || os.hostname();
 
 if (args.length < 2) {
   log.warn('Running with default arguments', { 
     serverAddress, 
     customHostname,
-    usage: 'node index.js <server-address> <custom-hostname>',
-    example: 'node index.js 192.168.1.100:3000 my-client-1'
+    usage: 'node index.js "<server-address>" "<custom-hostname>"',
+    example: 'node index.js "192.168.1.100:3000" "my-client-1"'
   });
 }
 

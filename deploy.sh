@@ -189,11 +189,19 @@ server {
     listen 5000;
     server_name ${SERVER_IP};
 
+    # Enable URL decoding
+    proxy_set_header Accept-Encoding "";
+    sub_filter_once off;
+
+    # Set larger buffer size for handling long URLs
+    large_client_header_buffers 4 32k;
+    
     location / {
         proxy_pass http://127.0.0.1:4321/;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Original-URI \$request_uri;
         
         # WebSocket support
         proxy_http_version 1.1;
@@ -201,11 +209,25 @@ server {
         proxy_set_header Connection "upgrade";
     }
 
-    location /api/ {
-        proxy_pass http://127.0.0.1:3000/api/;
+    # Special location for monitored-clients with encoded URLs
+    location ~ "^/api/monitored-clients/(.+)$" {
+        # Explicitly decode the URI
+        set \$decoded_uri \$1;
+        proxy_pass http://127.0.0.1:3000/api/monitored-clients/\$decoded_uri;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Original-URI \$request_uri;
+        proxy_set_header Accept-Encoding "";
+    }
+
+    # General API location
+    location /api/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Original-URI \$request_uri;
         
         # WebSocket support
         proxy_http_version 1.1;
@@ -213,20 +235,18 @@ server {
         proxy_set_header Connection "upgrade";
     }
 
-    # Dedicated location for WebSocket
+    # WebSocket location
     location /socket.io/ {
         proxy_pass http://127.0.0.1:3000/socket.io/;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header Origin "";
         
-        # WebSocket specific settings
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Origin "";
         
-        # WebSocket timeouts
         proxy_connect_timeout 7d;
         proxy_send_timeout 7d;
         proxy_read_timeout 7d;

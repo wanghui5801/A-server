@@ -1318,9 +1318,10 @@ app.put('/api/monitored-clients/:hostname/sort', (req, res) => {
 
 // Delete monitored client
 app.delete('/api/monitored-clients/:hostname', async (req, res) => {
-  const { hostname } = req.params;
-
   try {
+    // Double decode the hostname parameter to handle special characters
+    const hostname = decodeURIComponent(decodeURIComponent(req.params.hostname));
+
     // Start transaction
     await new Promise((resolve, reject) => {
       db.run('BEGIN TRANSACTION', (err) => {

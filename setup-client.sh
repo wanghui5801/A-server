@@ -26,20 +26,20 @@ install_node() {
                 "ubuntu"|"debian")
                     # Ubuntu/Debian systems
                     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-                    sudo apt-get install -y nodejs make gcc g++ python3 python3-pip
+                    sudo apt-get install -y nodejs make gcc g++ python3 python3-pip unzip
                     ;;
                 "centos"|"rhel"|"fedora")
                     # CentOS/RHEL/Fedora systems
                     curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-                    sudo yum install -y nodejs make gcc gcc-c++ python3 python3-pip
+                    sudo yum install -y nodejs make gcc gcc-c++ python3 python3-pip unzip
                     ;;
                 "opensuse"|"sles")
                     # OpenSUSE systems
-                    sudo zypper install -y nodejs20 make gcc gcc-c++ python3 python3-pip
+                    sudo zypper install -y nodejs20 make gcc gcc-c++ python3 python3-pip unzip
                     ;;
                 "arch"|"manjaro")
                     # Arch Linux/Manjaro systems
-                    sudo pacman -Sy --noconfirm nodejs npm make gcc python3 python-pip
+                    sudo pacman -Sy --noconfirm nodejs npm make gcc python3 python-pip unzip
                     ;;
                 *)
                     echo "Unsupported Linux distribution: $ID"
@@ -55,7 +55,7 @@ install_node() {
         if ! command -v brew &> /dev/null; then
             /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
         fi
-        brew install node@20
+        brew install node@20 unzip
         brew link node@20
     else
         echo "Unsupported operating system"
@@ -80,17 +80,17 @@ echo "Installing PM2..."
 sudo npm install pm2@5.3.1 -g
 
 # Create work directory and download files
-WORK_DIR="$HOME/astro-monitor-client"
-mkdir -p "$WORK_DIR"
-cd "$WORK_DIR"
+WORK_DIR="$HOME/astro-monitor"
+# mkdir -p "$WORK_DIR"
+# cd "$WORK_DIR"
 
-echo "Downloading files..."
-curl -L -o client.zip https://github.com/wanghui5801/A-server/archive/main.zip
-unzip -q client.zip
-mv A-server-main/client .
-mv A-server-main/package.json .
-mv A-server-main/tsconfig.client.json .
-rm -rf A-server-main client.zip
+# echo "Downloading files..."
+# curl -L -o client.zip https://github.com/wanghui5801/A-server/archive/main.zip
+# unzip -q client.zip
+# mv A-server-main/client .
+# mv A-server-main/package.json .
+# mv A-server-main/tsconfig.client.json .
+# rm -rf A-server-main client.zip
 
 # Create configuration file
 echo "Creating configuration file..."
@@ -107,7 +107,7 @@ npm install
 
 # Start the application with PM2
 echo "Starting application with PM2..."
-pm2 start "npx tsx client/index.ts $SERVER_IP:3000 $HOSTNAME" --name "astro-monitor-client"
+pm2 start "npx tsx client/index.ts \"$SERVER_IP:3000\" \"$HOSTNAME\"" --name "astro-monitor-client"
 
 # Configure PM2 service
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then

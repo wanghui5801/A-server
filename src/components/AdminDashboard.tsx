@@ -789,7 +789,9 @@ const AdminDashboard: React.FC = () => {
 
   const confirmDeleteClient = useCallback(async (hostname: string) => {
     try {
-      const response = await fetch(`${getApiUrl()}/api/monitored-clients/${hostname}`, {
+      // Double encode the hostname to handle special characters
+      const encodedHostname = encodeURIComponent(encodeURIComponent(hostname));
+      const response = await fetch(`${getApiUrl()}/api/monitored-clients/${encodedHostname}`, {
         method: 'DELETE',
       });
 
@@ -975,7 +977,9 @@ const AdminDashboard: React.FC = () => {
         }
       }
       
-      const setupCommand = `curl -L https://raw.githubusercontent.com/wanghui5801/A-server/main/setup-client.sh -o setup-client.sh && chmod +x setup-client.sh && ./setup-client.sh ${hostname} ${serverPublicIP}`;
+      // Escape hostname for shell command
+      const escapedHostname = `"${hostname.replace(/"/g, '\\"')}"`;
+      const setupCommand = `curl -L https://raw.githubusercontent.com/wanghui5801/A-server/main/setup-client.sh -o setup-client.sh && chmod +x setup-client.sh && ./setup-client.sh ${escapedHostname} "${serverPublicIP}"`;
       
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(setupCommand);
