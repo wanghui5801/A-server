@@ -10,12 +10,17 @@
     <img src="https://img.shields.io/badge/Node.js-20.0+-green.svg?logo=node.js" alt="Node.js Version" />
     <img src="https://img.shields.io/badge/TypeScript-5.0+-blue.svg?logo=typescript" alt="TypeScript Version" />
     <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License" />
+    <img src="https://img.shields.io/badge/Tested%20on-Debian%2011+-red.svg?logo=debian" alt="System Compatibility" />
   </p>
   
   <p>A comprehensive server monitoring system built with Astro + React, providing real-time monitoring capabilities for multiple servers.</p>
 </div>
 
 ## Quick Start Guide
+
+### System Requirements
+
+> ⚠️ **Note**: Currently only tested on Debian 11 and above. Support for other Linux distributions is not guaranteed.
 
 ### 1. Server Installation
 
