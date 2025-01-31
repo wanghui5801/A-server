@@ -1,6 +1,8 @@
 <div align="center">
-  <img src="./public/monitor-icon.svg" width="80" height="80" alt="Server Monitor Icon" style="margin: 20px 0;" />
-  <h1>Server Monitoring System</h1>
+  <h1>
+    <img src="./public/monitor-icon.svg" width="40" height="40" alt="Server Monitor Icon" style="vertical-align: middle; margin-right: 10px" />
+    Server Monitoring System
+  </h1>
   <p>A comprehensive server monitoring system built with Astro + React, providing real-time monitoring capabilities for multiple servers.</p>
 </div>
 
