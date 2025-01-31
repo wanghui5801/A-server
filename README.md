@@ -1,7 +1,7 @@
 <div align="center">
   <div style="display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 24px;">
     <img src="./public/monitor-icon.svg" width="64" height="64" alt="Server Monitor Icon" style="min-width: 64px;" />
-    <h1 style="margin: 0; font-size: 42px; line-height: 1.2;">Server Monitoring System</h1>
+    <h1 style="margin: 0; font-size: 42px; line-height: 1.2;">A-Server</h1>
   </div>
 
   <p>

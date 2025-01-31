@@ -1350,7 +1350,8 @@ app.get('/api/monitored-clients', (req, res) => {
         FROM clients
         GROUP BY hostname
         HAVING MAX(lastSeen)
-      ) c ON c.hostname = mc.hostname
+      )
+    ) c ON c.hostname = mc.hostname
     ORDER BY mc.sort_order DESC, mc.created_at ASC
   `;
 
