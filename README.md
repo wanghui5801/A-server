@@ -1,6 +1,31 @@
-# <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjODg4ODg4Ij4KICAgIDxwYXRoIHN0cm9rZUxpbmVjYXA9InJvdW5kIiBzdHJva2VMaW5lam9pbj0icm91bmQiIHN0cm9rZVdpZHRoPSIxLjUiIGQ9Ik02LjUgMTJoMmwyLTYgMyAxOCAyLjUtMTJoMiIgLz4KICAgIDxwYXRoIHN0cm9rZUxpbmVjYXA9InJvdW5kIiBzdHJva2VXaWR0aD0iMS41IiBkPSJNMyAxMmgyTTE5IDEyaDIiIC8+CiAgICA8cGF0aCBzdHJva2VMaW5lY2FwPSJyb3VuZCIgc3Ryb2tlV2lkdGg9IjEuNSIgb3BhY2l0eT0iMC41IiBkPSJNMSAxMmgxTTIyIDEyaDEiIC8+CiAgICA8Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSI5IiBzdHJva2VXaWR0aD0iMS41IiBvcGFjaXR5PSIwLjIiIC8+CiAgICA8Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSI1IiBzdHJva2VXaWR0aD0iMS41IiBvcGFjaXR5PSIwLjQiIC8+Cjwvc3ZnPg==" width="32" height="32" align="center" /> Server Monitoring System
-
-A comprehensive server monitoring system built with Astro + React, providing real-time monitoring capabilities for multiple servers.
+<div align="center">
+  <div style="margin-bottom: 20px">
+    <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="var(--color-fg-default, #24292f)" style="color: var(--color-fg-default, #24292f)" xmlns="http://www.w3.org/2000/svg">
+      <style>
+        @media (prefers-color-scheme: dark) {
+          svg { stroke: var(--color-fg-default, #c9d1d9) }
+        }
+      </style>
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6.5 12h2l2-6 3 18 2.5-12h2">
+        <animate attributeName="opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite"/>
+      </path>
+      <path stroke-linecap="round" stroke-width="1.5" d="M3 12h2M19 12h2">
+        <animate attributeName="opacity" values="0.3;0.8;0.3" dur="2s" repeatCount="indefinite"/>
+      </path>
+      <path stroke-linecap="round" stroke-width="1.5" opacity="0.5" d="M1 12h1M22 12h1">
+        <animate attributeName="opacity" values="0.2;0.5;0.2" dur="2s" repeatCount="indefinite"/>
+      </path>
+      <circle cx="12" cy="12" r="9" stroke-width="1.5" opacity="0.2">
+        <animate attributeName="opacity" values="0.1;0.3;0.1" dur="2s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="12" cy="12" r="5" stroke-width="1.5" opacity="0.4">
+        <animate attributeName="opacity" values="0.2;0.6;0.2" dur="2s" repeatCount="indefinite"/>
+      </circle>
+    </svg>
+  </div>
+  <h1>Server Monitoring System</h1>
+  <p>A comprehensive server monitoring system built with Astro + React, providing real-time monitoring capabilities for multiple servers.</p>
+</div>
 
 ## Quick Start Guide
 
