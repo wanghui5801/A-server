@@ -9,6 +9,7 @@
     <img src="https://img.shields.io/badge/React-18.0+-blue.svg?logo=react" alt="React Version" />
     <img src="https://img.shields.io/badge/Node.js-20.0+-green.svg?logo=node.js" alt="Node.js Version" />
     <img src="https://img.shields.io/badge/TypeScript-5.0+-blue.svg?logo=typescript" alt="TypeScript Version" />
+    <a href="https://hub.docker.com/r/xhh1128/a-server"><img src="https://img.shields.io/docker/image-size/xhh1128/a-server/latest?logo=docker" alt="Docker Image Size" /></a>
     <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License" />
     <img src="https://img.shields.io/badge/Tested%20on-Debian%2011+-red.svg?logo=debian" alt="System Compatibility" />
   </p>
@@ -23,6 +24,8 @@
 > ⚠️ **Note**: Currently only tested on Debian 11 and above. Support for other Linux distributions is not guaranteed.
 
 ### 1. Docker Deployment (Recommended)
+
+[![Deploy with Docker](https://img.shields.io/badge/Deploy%20with-Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/r/xhh1128/a-server)
 
 ```bash
 docker pull xhh1128/a-server:latest
