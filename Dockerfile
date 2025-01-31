@@ -4,6 +4,17 @@ FROM node:20-slim AS builder
 # Set working directory
 WORKDIR /build
 
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set Python path for node-gyp
+ENV PYTHON=/usr/bin/python3
+
 # Copy all project files
 COPY . .
 
