@@ -84,13 +84,51 @@ WORK_DIR="$HOME/astro-monitor-client"
 mkdir -p "$WORK_DIR"
 cd "$WORK_DIR"
 
-echo "Downloading files..."
-curl -L -o client.zip https://github.com/wanghui5801/A-server/archive/main.zip
-unzip -q client.zip
-mv A-server-main/client .
-mv A-server-main/package.json .
-mv A-server-main/tsconfig.client.json .
-rm -rf A-server-main client.zip
+echo "Creating project files..."
+
+# Create package.json with necessary dependencies
+cat > package.json << 'EOL'
+{
+  "name": "astro-monitor-client",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "tsx client/index.ts"
+  },
+  "dependencies": {
+    "@types/debug": "^4.1.12",
+    "@types/node": "^20.10.5",
+    "axios": "^1.6.2",
+    "debug": "^4.3.4",
+    "socket.io-client": "^4.7.2",
+    "tsx": "^4.6.2",
+    "typescript": "^5.3.3",
+    "winston": "^3.11.0"
+  }
+}
+EOL
+
+# Create tsconfig.json
+cat > tsconfig.json << 'EOL'
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "lib": ["ES2020"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "dist"
+  },
+  "include": ["client/**/*"],
+  "exclude": ["node_modules"]
+}
+EOL
+
+# Create client directory and index.ts
+mkdir -p client
+curl -L -o client/index.ts https://raw.githubusercontent.com/wanghui5801/A-server/main/client/index.ts
 
 # Create configuration file
 echo "Creating configuration file..."
