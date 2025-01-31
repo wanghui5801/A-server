@@ -1,38 +1,52 @@
 #!/bin/bash
 
-# 设置错误时退出
+# Exit on error
 set -e
 
-# 添加颜色输出
+# Add color output
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}开始部署生产环境...${NC}"
+echo -e "${GREEN}Starting production deployment...${NC}"
 
-# 检查基本系统要求
+# Check basic system requirements
 check_requirements() {
-    command -v git >/dev/null 2>&1 || { echo -e "${YELLOW}需要安装 git${NC}"; exit 1; }
-    command -v curl >/dev/null 2>&1 || { echo -e "${YELLOW}需要安装 curl${NC}"; exit 1; }
-    command -v nginx >/dev/null 2>&1 || { echo -e "${YELLOW}需要安装 nginx${NC}"; exit 1; }
+    command -v git >/dev/null 2>&1 || { echo -e "${YELLOW}Git installation required${NC}"; exit 1; }
+    command -v curl >/dev/null 2>&1 || { echo -e "${YELLOW}Curl installation required${NC}"; exit 1; }
+    command -v nginx >/dev/null 2>&1 || { echo -e "${YELLOW}Nginx installation required${NC}"; install_nginx; }
     
-    # 检查 Node.js 版本
+    # Check Node.js version
     if command -v node >/dev/null 2>&1; then
         node_version=$(node -v | cut -d "v" -f 2)
         required_version="20.0.0"
         if [ "$(printf '%s\n' "$required_version" "$node_version" | sort -V | head -n1)" != "$required_version" ]; then
-            echo -e "${YELLOW}Node.js 版本必须 >= 20.0.0，当前版本: $node_version${NC}"
+            echo -e "${YELLOW}Node.js version must be >= 20.0.0, current version: $node_version${NC}"
             install_nodejs
         fi
     else
-        echo -e "${YELLOW}需要安装 Node.js >= 20.0.0${NC}"
+        echo -e "${YELLOW}Node.js >= 20.0.0 installation required${NC}"
         install_nodejs
     fi
 }
 
-# 仅在需要时安装 Node.js
+# Install Nginx
+install_nginx() {
+    echo -e "${YELLOW}Installing Nginx...${NC}"
+    if [ -f /etc/debian_version ]; then
+        sudo apt-get update
+        sudo apt-get install -y nginx
+    elif [ -f /etc/redhat-release ]; then
+        sudo yum install -y epel-release
+        sudo yum install -y nginx
+    fi
+    
+    echo -e "${GREEN}Nginx installation completed${NC}"
+}
+
+# Install Node.js only when needed
 install_nodejs() {
-    echo "安装 Node.js 20.x..."
+    echo "Installing Node.js 20.x..."
     if [ -f /etc/debian_version ]; then
         curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
         sudo apt-get update
@@ -43,9 +57,9 @@ install_nodejs() {
     fi
 }
 
-# 安装系统依赖
+# Install system dependencies
 install_dependencies() {
-    echo -e "${YELLOW}正在安装系统依赖...${NC}"
+    echo -e "${YELLOW}Installing system dependencies...${NC}"
     
     if [ -f /etc/debian_version ]; then
         sudo apt-get install -y python3 make g++ sqlite3 python3-pip build-essential
@@ -54,15 +68,15 @@ install_dependencies() {
         sudo yum groupinstall -y "Development Tools"
     fi
 
-    # 安装全局依赖
+    # Install global dependencies
     sudo npm install -g typescript tsx pm2
 }
 
-# 克隆项目
+# Clone project
 clone_project() {
-    echo "克隆项目代码..."
+    echo "Cloning project code..."
     if [ -d "A-server" ]; then
-        echo "更新已存在的代码..."
+        echo "Updating existing code..."
         cd A-server
         git pull
     else
@@ -71,42 +85,42 @@ clone_project() {
     fi
 }
 
-# 设置环境变量
+# Setup environment variables
 setup_env() {
-    echo "配置环境变量..."
-    # 获取服务器IP
+    echo "Configuring environment variables..."
+    # Get server IP
     SERVER_IP=$(curl -s http://ipinfo.io/ip)
     
-    # 创建或更新前端 .env 文件
+    # Create or update frontend .env file
     cat > .env << EOF
 PUBLIC_API_URL=http://localhost:3000
 NODE_ENV=production
 EOF
 }
 
-# 安装项目依赖
+# Install project dependencies
 setup_project() {
-    echo "安装项目依赖..."
-    # 清理 node_modules 和锁文件，确保干净安装
+    echo "Installing project dependencies..."
+    # Clean node_modules and lock file for clean installation
     rm -rf node_modules package-lock.json dist
     npm cache clean --force
     
-    # 安装依赖
+    # Install dependencies
     npm install
 }
 
-# 创建日志目录
+# Create log directory
 setup_directories() {
-    echo "创建日志目录..."
+    echo "Creating log directory..."
     mkdir -p logs
-    # 设置适当的日志目录权限（755足够PM2写入日志）
+    # Set appropriate log directory permissions (755 is sufficient for PM2 to write logs)
     chmod 755 logs
 }
 
-# 创建 PM2 配置文件
+# Create PM2 configuration file
 create_pm2_config() {
-    echo "创建 PM2 配置文件..."
-    cat > ecosystem.config.js << EOF
+    echo "Creating PM2 configuration file..."
+    cat > ecosystem.config.cjs << EOF
 module.exports = {
   apps: [
     {
@@ -126,7 +140,7 @@ module.exports = {
       name: 'a-server-backend',
       script: 'tsx',
       args: 'server/index.ts',
-      interpreter: 'node_modules/.bin/tsx',  // 使用本地安装的 tsx
+      interpreter: 'node_modules/.bin/tsx',  // Use locally installed tsx
       env: {
         NODE_ENV: 'production',
         PORT: '3000'
@@ -141,118 +155,117 @@ module.exports = {
 EOF
 }
 
-# 构建项目
+# Build project
 build_project() {
-    echo -e "${YELLOW}构建项目...${NC}"
-    # 构建前端
+    echo -e "${YELLOW}Building project...${NC}"
+    # Build frontend
     NODE_ENV=production npm run build
     
-    # 确保构建目录权限正确
+    # Ensure correct build directory permissions
     sudo chown -R $USER:$USER dist
     
-    # 停止现有PM2进程（如果存在）
+    # Stop existing PM2 processes (if any)
     pm2 stop a-server-frontend 2>/dev/null || true
     pm2 stop a-server-backend 2>/dev/null || true
     pm2 delete a-server-frontend 2>/dev/null || true
     pm2 delete a-server-backend 2>/dev/null || true
     
-    # 使用PM2配置文件启动服务
-    pm2 start ecosystem.config.js
+    # Start services using PM2 config file
+    pm2 start ecosystem.config.cjs
     pm2 save
     
-    # 等待服务启动
-    echo -e "${YELLOW}等待服务启动...${NC}"
+    # Wait for services to start
+    echo -e "${YELLOW}Waiting for services to start...${NC}"
     sleep 5
 }
 
-# 配置 Nginx
+# Configure Nginx
 setup_nginx() {
-    echo "配置 Nginx..."
+    echo "Configuring Nginx..."
     
-    # 创建配置文件
+    # Create configuration file
     sudo tee /etc/nginx/sites-available/astro-monitor <<EOF
 server {
     listen 5000;
     server_name ${SERVER_IP};
 
-    # 前端部分
     location / {
         proxy_pass http://127.0.0.1:4321/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
     }
 
     location /api/ {
         proxy_pass http://127.0.0.1:3000/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
     }
 }
 EOF
 
-    # 删除默认配置（如果存在）
+    # Remove default config (if exists)
     sudo rm -f /etc/nginx/sites-enabled/default
     
-    # 删除旧的配置（如果存在）
+    # Remove old config (if exists)
     sudo rm -f /etc/nginx/sites-enabled/astro-monitor
     sudo rm -f /etc/nginx/conf.d/astro-monitor.conf
     
-    # 创建软链接到 sites-enabled
+    # Create symlink to sites-enabled
     sudo ln -s /etc/nginx/sites-available/astro-monitor /etc/nginx/sites-enabled/
 
-    # 确保 nginx 用户有正确的权限
+    # Ensure nginx user has correct permissions
     sudo chown -R www-data:www-data /etc/nginx/sites-available/astro-monitor
     sudo chmod 644 /etc/nginx/sites-available/astro-monitor
 
-    # 测试 Nginx 配置
+    # Test Nginx configuration
     sudo nginx -t
 
-    # 重启 Nginx
+    # Restart Nginx
     sudo systemctl restart nginx
 }
 
-# 检查服务状态
+# Check service status
 check_service() {
-    echo -e "${YELLOW}检查服务状态...${NC}"
+    echo -e "${YELLOW}Checking service status...${NC}"
     
-    # 检查前端PM2进程
+    # Check frontend PM2 process
     if ! pm2 show a-server-frontend > /dev/null 2>&1; then
-        echo -e "${YELLOW}错误: 前端服务未正常运行${NC}"
+        echo -e "${YELLOW}Error: Frontend service is not running properly${NC}"
         exit 1
     fi
     
-    # 检查后端PM2进程
+    # Check backend PM2 process
     if ! pm2 show a-server-backend > /dev/null 2>&1; then
-        echo -e "${YELLOW}错误: 后端服务未正常运行${NC}"
+        echo -e "${YELLOW}Error: Backend service is not running properly${NC}"
         exit 1
     fi
     
-    # 检查 Nginx 状态
+    # Check Nginx status
     if ! systemctl is-active --quiet nginx; then
-        echo -e "${YELLOW}错误: Nginx 服务未正常运行${NC}"
+        echo -e "${YELLOW}Error: Nginx service is not running properly${NC}"
         exit 1
     fi
     
-    # 检查端口
+    # Check ports
     if ! netstat -tuln | grep -q ":5000 "; then
-        echo -e "${YELLOW}错误: 5000 端口未正常监听${NC}"
+        echo -e "${YELLOW}Error: Port 5000 is not listening${NC}"
         exit 1
     fi
     
     if ! netstat -tuln | grep -q ":3000 "; then
-        echo -e "${YELLOW}错误: 3000 端口未正常监听${NC}"
+        echo -e "${YELLOW}Error: Port 3000 is not listening${NC}"
         exit 1
     fi
     
     if ! netstat -tuln | grep -q ":4321 "; then
-        echo -e "${YELLOW}错误: 4321 端口未正常监听${NC}"
+        echo -e "${YELLOW}Error: Port 4321 is not listening${NC}"
         exit 1
     fi
     
-    echo -e "${GREEN}所有服务正常运行！${NC}"
+    echo -e "${GREEN}All services are running properly!${NC}"
 }
 
-# 主函数
+# Main function
 main() {
     check_requirements
     install_dependencies
@@ -265,28 +278,28 @@ main() {
     setup_nginx
     check_service
     
-    echo -e "${GREEN}部署完成！${NC}"
-    echo -e "${GREEN}服务已经在 5000 端口启动${NC}"
-    echo -e "${GREEN}可以通过 http://${SERVER_IP}:5000 访问${NC}"
+    echo -e "${GREEN}Deployment completed!${NC}"
+    echo -e "${GREEN}Service is running on port 5000${NC}"
+    echo -e "${GREEN}You can access it at http://${SERVER_IP}:5000${NC}"
     echo ""
-    echo -e "${YELLOW}查看服务状态：${NC}"
-    echo "前端日志：pm2 logs a-server-frontend"
-    echo "后端日志：pm2 logs a-server-backend"
-    echo "或者查看日志文件："
-    echo "前端错误日志：tail -f logs/frontend-error.log"
-    echo "前端输出日志：tail -f logs/frontend-output.log"
-    echo "后端错误日志：tail -f logs/backend-error.log"
-    echo "后端输出日志：tail -f logs/backend-output.log"
-    echo "Nginx 状态：sudo systemctl status nginx"
-    echo "Nginx 错误日志：sudo tail -f /var/log/nginx/error.log"
-    echo "Nginx 访问日志：sudo tail -f /var/log/nginx/access.log"
+    echo -e "${YELLOW}View service status:${NC}"
+    echo "Frontend logs: pm2 logs a-server-frontend"
+    echo "Backend logs: pm2 logs a-server-backend"
+    echo "Or check log files:"
+    echo "Frontend error log: tail -f logs/frontend-error.log"
+    echo "Frontend output log: tail -f logs/frontend-output.log"
+    echo "Backend error log: tail -f logs/backend-error.log"
+    echo "Backend output log: tail -f logs/backend-output.log"
+    echo "Nginx status: sudo systemctl status nginx"
+    echo "Nginx error log: sudo tail -f /var/log/nginx/error.log"
+    echo "Nginx access log: sudo tail -f /var/log/nginx/access.log"
     echo ""
-    echo -e "${YELLOW}停止服务：${NC}"
-    echo "运行 'pm2 stop all' 来停止所有服务"
+    echo -e "${YELLOW}Stop services:${NC}"
+    echo "Run 'pm2 stop all' to stop all services"
     echo ""
-    echo -e "${YELLOW}Node.js 版本：$(node -v)${NC}"
-    echo -e "${YELLOW}NPM 版本：$(npm -v)${NC}"
+    echo -e "${YELLOW}Node.js version: $(node -v)${NC}"
+    echo -e "${YELLOW}NPM version: $(npm -v)${NC}"
 }
 
-# 运行主函数
+# Run main function
 main

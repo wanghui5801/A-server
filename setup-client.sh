@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 交互式输入参数
+# Interactive parameter input
 if [ "$#" -ne 2 ]; then
     echo "No arguments provided. Starting interactive mode..."
     read -p "Enter hostname (e.g., client1): " HOSTNAME
@@ -16,11 +16,41 @@ else
     SERVER_IP=$2
 fi
 
-# 检查Node.js版本或安装Node.js 20
+# Function to install or update Node.js 20
 install_node() {
     if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-        sudo apt-get install -y nodejs make gcc g++ python3 python3-pip
+        # Detect Linux distribution
+        if [ -f /etc/os-release ]; then
+            . /etc/os-release
+            case "$ID" in
+                "ubuntu"|"debian")
+                    # Ubuntu/Debian systems
+                    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+                    sudo apt-get install -y nodejs make gcc g++ python3 python3-pip
+                    ;;
+                "centos"|"rhel"|"fedora")
+                    # CentOS/RHEL/Fedora systems
+                    curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+                    sudo yum install -y nodejs make gcc gcc-c++ python3 python3-pip
+                    ;;
+                "opensuse"|"sles")
+                    # OpenSUSE systems
+                    sudo zypper install -y nodejs20 make gcc gcc-c++ python3 python3-pip
+                    ;;
+                "arch"|"manjaro")
+                    # Arch Linux/Manjaro systems
+                    sudo pacman -Sy --noconfirm nodejs npm make gcc python3 python-pip
+                    ;;
+                *)
+                    echo "Unsupported Linux distribution: $ID"
+                    echo "Please install Node.js 20 manually"
+                    exit 1
+                    ;;
+            esac
+        else
+            echo "Cannot detect Linux distribution"
+            exit 1
+        fi
     elif [[ "$OSTYPE" == "darwin"* ]]; then
         if ! command -v brew &> /dev/null; then
             /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -33,7 +63,7 @@ install_node() {
     fi
 }
 
-# 检查Node.js版本
+# Check Node.js version
 if ! command -v node &> /dev/null; then
     echo "Node.js is not installed. Installing Node.js 20..."
     install_node
@@ -45,20 +75,25 @@ else
     fi
 fi
 
-# 创建工作目录并下载文件
-WORK_DIR="$HOME/astro-monitor"
-# mkdir -p "$WORK_DIR"
-# cd "$WORK_DIR"
+# Install PM2 globally
+echo "Installing PM2..."
+sudo npm install pm2@5.3.1 -g
 
-# echo "Downloading files..."
-# curl -L -o client.zip https://github.com/wanghui5801/A-server/archive/main.zip
-# unzip -q client.zip
-# mv A-server-main/client .
-# mv A-server-main/package.json .
-# mv A-server-main/tsconfig.client.json .
-# rm -rf A-server-main client.zip
+# Create work directory and download files
+WORK_DIR="$HOME/astro-monitor-client"
+mkdir -p "$WORK_DIR"
+cd "$WORK_DIR"
 
-# 创建配置文件
+echo "Downloading files..."
+curl -L -o client.zip https://github.com/wanghui5801/A-server/archive/main.zip
+unzip -q client.zip
+mv A-server-main/client .
+mv A-server-main/package.json .
+mv A-server-main/tsconfig.client.json .
+rm -rf A-server-main client.zip
+
+# Create configuration file
+echo "Creating configuration file..."
 cat > client/config.json << EOL
 {
   "hostname": "$HOSTNAME",
@@ -66,50 +101,33 @@ cat > client/config.json << EOL
 }
 EOL
 
-# 安装依赖
+# Install dependencies
+echo "Installing dependencies..."
 npm install
 
-# 创建启动脚本
-cat > start.sh << EOL
-#!/bin/bash
-export NODE_ENV=production
-npx tsx client/index.ts "$SERVER_IP:3000" "$HOSTNAME"
-EOL
+# Start the application with PM2
+echo "Starting application with PM2..."
+pm2 start "npx tsx client/index.ts $SERVER_IP:3000 $HOSTNAME" --name "astro-monitor-client"
 
-chmod +x start.sh
-
-# 创建systemd服务（仅限Linux系统）
+# Configure PM2 service
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    sudo tee /etc/systemd/system/astro-monitor-client.service << EOL
-[Unit]
-Description=Astro Monitor Client
-After=network.target
-
-[Service]
-Type=simple
-User=$USER
-WorkingDirectory=$WORK_DIR
-Environment=NODE_ENV=production
-Environment=PATH=/usr/local/bin:$PATH
-ExecStart=$WORK_DIR/start.sh
-Restart=always
-RestartSec=10
-MemoryLimit=200M
-
-[Install]
-WantedBy=multi-user.target
-EOL
-
-    sudo systemctl daemon-reload
-    sudo systemctl enable astro-monitor-client
-    sudo systemctl start astro-monitor-client
+    echo "Setting up PM2 startup service..."
+    pm2 startup
+    pm2 save
     
-    echo "Service has been installed and started"
-    echo "To check status: sudo systemctl status astro-monitor-client"
+    echo "Service has been installed and started with PM2"
+    echo "To check status: pm2 status"
+    echo "To view logs: pm2 logs astro-monitor-client"
+    echo "To restart: pm2 restart astro-monitor-client"
+    echo "To stop: pm2 stop astro-monitor-client"
 else
-    echo "To start the client, run: ./start.sh"
+    echo "PM2 service started successfully"
+    echo "To check status: pm2 status"
+    echo "To view logs: pm2 logs astro-monitor-client"
+    echo "To restart: pm2 restart astro-monitor-client"
+    echo "To stop: pm2 stop astro-monitor-client"
 fi
 
-echo "Setup completed!"
+echo "Setup completed successfully!"
 echo "Hostname: $HOSTNAME"
 echo "Server IP: $SERVER_IP"
