@@ -154,14 +154,26 @@ interface SystemInfo {
 }
 
 // Get CPU usage
+let lastCpuInfo: { idle: number; total: number }[] | null = null;
+
 async function getCpuUsage(): Promise<number> {
   const cpus = os.cpus();
-  const cpuUsage = cpus.reduce((acc, cpu) => {
-    const total = Object.values(cpu.times).reduce((a, b) => a + b);
-    const idle = cpu.times.idle;
-    return acc + ((total - idle) / total) * 100;
-  }, 0) / cpus.length;
-  return Math.round(cpuUsage * 100) / 100;
+  
+  // Calculate CPU usage for each core
+  const cpuUsage = cpus.map(cpu => {
+    // Calculate total time spent in all states
+    const total = Object.values(cpu.times).reduce((acc, time) => acc + time, 0);
+    
+    // Calculate non-idle time (total - idle)
+    const active = total - cpu.times.idle;
+    
+    // Calculate percentage of time spent active
+    return (active / total) * 100;
+  });
+
+  // Calculate average CPU usage across all cores
+  const averageUsage = cpuUsage.reduce((acc, usage) => acc + usage, 0) / cpus.length;
+  return Math.round(averageUsage * 100) / 100;
 }
 
 // Get memory usage
