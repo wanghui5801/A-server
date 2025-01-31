@@ -55,19 +55,13 @@ interface PingConfig {
 // Create a function to get socket URL
 const getSocketUrl = () => {
   if (typeof window === 'undefined') return 'http://localhost:3000';
-  const protocol = window.location.protocol;
-  const hostname = window.location.hostname;
-  const port = '3000'; // Backend server port
-  return `${protocol}//${hostname}:${port}`;
+  return window.location.origin;
 };
 
 // Create a function to get API URL
 const getApiUrl = () => {
   if (typeof window === 'undefined') return 'http://localhost:3000';
-  const protocol = window.location.protocol;
-  const hostname = window.location.hostname;
-  const port = '3000'; // Backend server port
-  return `${protocol}//${hostname}:${port}`;
+  return window.location.origin;
 };
 
 // Create socket connection

@@ -22,40 +22,31 @@
 
 > ⚠️ **Note**: Currently only tested on Debian 11 and above. Support for other Linux distributions is not guaranteed.
 
-### 1. Server Installation
+### 1. Docker Deployment (Recommended)
 
 ```bash
-# One-line server installation
-curl -sSL https://raw.githubusercontent.com/wanghui5801/A-server/main/deploy.sh | bash
+docker pull xhh1128/a-server:latest
+docker run -d -p 8080:8080 -p 3000:3000 --name a-server-container xhh1128/a-server:latest
+```
 
-# Or download and inspect first (recommended)
+Access the monitoring dashboard at `http://localhost:8080`
+
+### 2. Server Installation
+
+```bash
 curl -o deploy.sh https://raw.githubusercontent.com/wanghui5801/A-server/main/deploy.sh
 chmod +x deploy.sh
 ./deploy.sh
 ```
 
-After installation, access the monitoring dashboard at:
-- Development: `http://localhost:4321`
-- Production: `http://<your-server-ip>:5000`
+Access the monitoring dashboard at `http://<your-server-ip>:5000`
 
-### 2. Client Installation
-
-Install the monitoring client on each server you want to monitor:
+### 3. Client Installation
 
 ```bash
-# One-line client installation (replace with your values)
-curl -sSL https://raw.githubusercontent.com/wanghui5801/A-server/main/setup-client.sh | bash -s -- <hostname> <server_ip>
-
-# Example:
-curl -sSL https://raw.githubusercontent.com/wanghui5801/A-server/main/setup-client.sh | bash -s -- client1 192.168.1.100
-
-# Or download and inspect first (recommended)
 curl -o setup-client.sh https://raw.githubusercontent.com/wanghui5801/A-server/main/setup-client.sh
 chmod +x setup-client.sh
 ./setup-client.sh <hostname> <server_ip>
-
-# Interactive mode (will prompt for hostname and server IP)
-./setup-client.sh
 ```
 
 The installation scripts will automatically:
@@ -128,98 +119,34 @@ The installation scripts will automatically:
 
 3. Access the development server at `http://localhost:4321`
 
-## Production Deployment
+## Deployment
 
-We provide two scripts for easy deployment:
-
-### Server Deployment (`deploy.sh`)
-
-This script automates the server-side deployment process:
-
-1. Make the script executable:
-   ```bash
-   chmod +x deploy.sh
-   ```
-
-2. Run the deployment script:
-   ```bash
-   ./deploy.sh
-   ```
-
-The script will:
-- Install required dependencies (Node.js, Nginx, etc.)
-- Set up PM2 for process management
-- Configure Nginx as a reverse proxy
-- Start both frontend and backend services
-- Set up automatic startup on system boot
-
-### Client Setup (`setup-client.sh`)
-
-This script helps set up monitoring clients on target servers:
-
-1. Make the script executable:
-   ```bash
-   chmod +x setup-client.sh
-   ```
-
-2. Run the setup script with parameters:
-   ```bash
-   ./setup-client.sh <hostname> <server_ip>
-   ```
-   Example:
-   ```bash
-   ./setup-client.sh client1 192.168.1.100
-   ```
-
-The script will:
-- Install Node.js and required dependencies
-- Set up the monitoring client
-- Configure PM2 for process management
-- Create necessary configuration files
-- Start the monitoring service
-
-## Usage Guide
-
-1. After deployment, access the monitoring dashboard at:
-   - Development: `http://localhost:4321`
-   - Production: `http://<your-server-ip>:5000`
-
-2. Log in to the dashboard using your credentials
-
-3. The dashboard will display all connected clients automatically
-
-4. Features available:
-   - View real-time server metrics
-   - Access SSH terminal for connected servers
-   - Perform ping tests
-   - View historical data
-
-## Monitoring Client Management
-
-Common PM2 commands for client management:
+### Using Docker
 
 ```bash
-# Check client status
-pm2 status astro-monitor-client
+# Using pre-built image
+docker pull xhh1128/a-server:latest
+docker run -d -p 8080:8080 -p 3000:3000 --name a-server-container xhh1128/a-server:latest
 
-# View logs
-pm2 logs astro-monitor-client
-
-# Restart client
-pm2 restart astro-monitor-client
-
-# Stop client
-pm2 stop astro-monitor-client
+# Or build your own image
+docker build -t a-server .
+docker run -d -p 8080:8080 -p 3000:3000 --name a-server-container a-server
 ```
 
-## Development Commands
+### Manual Deployment
 
-- `npm run dev` - Start development server
-- `npm run build` - Build production version
-- `npm run preview` - Preview production build
-- `npm run server` - Start backend server
-- `npm run client` - Start monitoring client
+Use the deployment script:
+```bash
+chmod +x deploy.sh
+./deploy.sh
+```
+
+## Configuration
+
+- Frontend port: 8080 (configurable)
+- Backend API port: 3000 (configurable)
+- Environment variables can be configured in `.env` file
 
 ## License
 
-MIT
+MIT License - see the [LICENSE](LICENSE) file for details

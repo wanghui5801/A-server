@@ -8,19 +8,14 @@ import '../styles/animations.css';
 // Function to get API URL
 const getApiUrl = () => {
   if (typeof window === 'undefined') return 'http://localhost:3000';
-  const protocol = window.location.protocol;
-  const hostname = window.location.hostname;
-  const port = '3000'; // Backend server port
-  return `${protocol}//${hostname}:${port}`;
+  return window.location.origin;
 };
 
 // Function to get WebSocket URL
 const getWsUrl = () => {
   if (typeof window === 'undefined') return 'ws://localhost:3000';
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const hostname = window.location.hostname;
-  const port = '3000'; // Backend server port
-  return `${protocol}//${hostname}:${port}`;
+  return `${protocol}//${window.location.host}`;
 };
 
 interface SSHTerminalModalProps {

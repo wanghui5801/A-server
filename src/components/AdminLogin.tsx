@@ -8,10 +8,7 @@ interface AdminLoginProps {
 // Function to get API URL
 const getApiUrl = () => {
   if (typeof window === 'undefined') return 'http://localhost:3000';
-  const protocol = window.location.protocol;
-  const hostname = window.location.hostname;
-  const port = '3000'; // Backend server port
-  return `${protocol}//${hostname}:${port}`;
+  return window.location.origin;
 };
 
 const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
