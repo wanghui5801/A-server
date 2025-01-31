@@ -102,7 +102,12 @@ const log = logger;
 // Parse command line arguments
 const args = process.argv.slice(2);
 const serverAddress = args[0]?.replace(/^"|"$/g, '') || 'localhost:3000';
-const customHostname = args[1]?.replace(/^"|"$/g, '') || os.hostname();
+
+// Properly handle hostname with special characters
+const customHostname = args[1] ? 
+  // If hostname is provided, unescape it and remove any surrounding quotes
+  args[1].replace(/^"|"$/g, '').replace(/\\(.)/g, '$1') : 
+  os.hostname();
 
 if (args.length < 2) {
   log.warn('Running with default arguments', { 

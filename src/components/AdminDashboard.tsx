@@ -977,9 +977,11 @@ const AdminDashboard: React.FC = () => {
         }
       }
       
-      // Escape hostname for shell command
-      const escapedHostname = `"${hostname.replace(/"/g, '\\"')}"`;
-      const setupCommand = `curl -L https://raw.githubusercontent.com/wanghui5801/A-server/main/setup-client.sh -o setup-client.sh && chmod +x setup-client.sh && ./setup-client.sh ${escapedHostname} "${serverPublicIP}"`;
+      // Properly escape hostname for shell command
+      // First escape any existing single quotes
+      const escapedHostname = hostname.replace(/'/g, "'\\''");
+      // Then wrap in single quotes to preserve all special characters
+      const setupCommand = `curl -L https://raw.githubusercontent.com/wanghui5801/A-server/main/setup-client.sh -o setup-client.sh && chmod +x setup-client.sh && ./setup-client.sh '${escapedHostname}' "${serverPublicIP}"`;
       
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(setupCommand);

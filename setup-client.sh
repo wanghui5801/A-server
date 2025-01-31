@@ -94,12 +94,15 @@ rm -rf A-server-main client.zip
 
 # Create configuration file
 echo "Creating configuration file..."
-cat > client/config.json << EOL
+cat > client/config.json << 'EOL'
 {
-  "hostname": "$HOSTNAME",
-  "serverUrl": "http://$SERVER_IP:3000"
+  "hostname": "${HOSTNAME}",
+  "serverUrl": "http://${SERVER_IP}:3000"
 }
 EOL
+
+# Use envsubst to replace variables
+envsubst < client/config.json > client/config.json.tmp && mv client/config.json.tmp client/config.json
 
 # Install dependencies
 echo "Installing dependencies..."
@@ -107,7 +110,9 @@ npm install
 
 # Start the application with PM2
 echo "Starting application with PM2..."
-pm2 start "npx tsx client/index.ts \"$SERVER_IP:3000\" \"$HOSTNAME\"" --name "astro-monitor-client"
+# Escape the hostname for the command line
+ESCAPED_HOSTNAME=$(printf '%q' "$HOSTNAME")
+pm2 start "npx tsx client/index.ts \"$SERVER_IP:3000\" $ESCAPED_HOSTNAME" --name "astro-monitor-client"
 
 # Configure PM2 service
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
