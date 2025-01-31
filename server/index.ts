@@ -7,7 +7,6 @@ import { dirname, join } from 'path';
 import cors from 'cors';
 import { Client } from 'ssh2';
 import type { ClientChannel } from 'ssh2';
-import geoip from 'geoip-lite';
 import bcrypt from 'bcrypt';
 import { setupSSHServer } from './ssh';
 
@@ -60,6 +59,16 @@ const CLEANUP_INTERVAL = 3600000; // Run cleanup every hour
 const PING_HISTORY_RETENTION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const MAX_CLIENTS_HISTORY = 100; // Maximum number of historical records per client
 
+// Add IP geolocation cache configuration
+const IP_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+const IP_CACHE_CLEANUP_INTERVAL = 24 * 60 * 60 * 1000; // Clean up every 24 hours
+
+// Cache interface
+interface IPCacheEntry {
+  countryCode: string;
+  timestamp: number;
+}
+
 // Add logging utility
 const logger = {
   error: (...args: any[]) => {
@@ -90,6 +99,40 @@ const db = new sqlite3.Database(join(__dirname, 'monitor.db'), (err) => {
   }
   logger.info('Connected to database');
 });
+
+// Create IP cache table
+db.serialize(() => {
+  db.run(`CREATE TABLE IF NOT EXISTS ip_cache (
+    ip TEXT PRIMARY KEY,
+    country_code TEXT NOT NULL,
+    timestamp INTEGER NOT NULL
+  )`, (err) => {
+    if (err) {
+      logger.error('Error creating IP cache table:', err);
+    } else {
+      logger.info('IP cache table ready');
+    }
+  });
+});
+
+// Add function to clean up old IP cache entries
+async function cleanupIPCache() {
+  const expiryTime = Date.now() - IP_CACHE_DURATION;
+  try {
+    await new Promise((resolve, reject) => {
+      db.run('DELETE FROM ip_cache WHERE timestamp < ?', [expiryTime], (err) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
+    logger.debug('Cleaned up old IP cache entries');
+  } catch (error) {
+    logger.error('Error cleaning up IP cache:', error);
+  }
+}
+
+// Schedule regular cleanup
+setInterval(cleanupIPCache, IP_CACHE_CLEANUP_INTERVAL);
 
 // Add database cleanup function after db initialization
 function setupDatabaseCleanup() {
@@ -410,13 +453,90 @@ async function getPublicIP(socket: any): Promise<string | null> {
 }
 
 // Add function to get country code
-function getCountryCode(ip: string): string | null {
+async function getCountryCode(ip: string): Promise<string | null> {
   try {
     logger.debug('Getting country code for IP:', ip);
-    const geo = geoip.lookup(ip);
-    logger.debug('GeoIP lookup result:', geo);
-    const countryCode = geo?.country?.toLowerCase() || null;
-    logger.debug('Resolved country code:', countryCode);
+    
+    // Check cache first
+    const cachedResult = await new Promise<IPCacheEntry | null>((resolve, reject) => {
+      db.get('SELECT country_code, timestamp FROM ip_cache WHERE ip = ?', [ip], (err, row: any) => {
+        if (err) reject(err);
+        else resolve(row ? { countryCode: row.country_code, timestamp: row.timestamp } : null);
+      });
+    });
+
+    // If we have a valid cached result that hasn't expired
+    if (cachedResult && (Date.now() - cachedResult.timestamp) < IP_CACHE_DURATION) {
+      logger.debug('Using cached country code:', cachedResult.countryCode);
+      return cachedResult.countryCode;
+    }
+
+    // If cache miss or expired, try API services
+    let countryCode: string | null = null;
+    
+    // Try primary IP API service
+    try {
+      const response = await fetch(`https://ipapi.co/${ip}/country`);
+      if (response.ok) {
+        const country = await response.text();
+        if (country && country.length === 2) {
+          countryCode = country.toLowerCase();
+          logger.debug('Resolved country code from primary service:', countryCode);
+        }
+      }
+    } catch (primaryError) {
+      logger.debug('Primary IP lookup failed:', primaryError);
+    }
+
+    // If primary service failed, try backup service
+    if (!countryCode) {
+      try {
+        const response = await fetch(`https://api.iplocation.net/?ip=${ip}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.country_code2) {
+            countryCode = data.country_code2.toLowerCase();
+            logger.debug('Resolved country code from backup service:', countryCode);
+          }
+        }
+      } catch (backupError) {
+        logger.debug('Backup IP lookup failed:', backupError);
+      }
+    }
+
+    // If both services failed, try third service
+    if (!countryCode) {
+      try {
+        const response = await fetch(`https://ipwho.is/${ip}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.country_code) {
+            countryCode = data.country_code.toLowerCase();
+            logger.debug('Resolved country code from third service:', countryCode);
+          }
+        }
+      } catch (thirdError) {
+        logger.debug('Third IP lookup failed:', thirdError);
+      }
+    }
+
+    // If we got a country code, cache it
+    if (countryCode) {
+      await new Promise((resolve, reject) => {
+        db.run(
+          'INSERT OR REPLACE INTO ip_cache (ip, country_code, timestamp) VALUES (?, ?, ?)',
+          [ip, countryCode, Date.now()],
+          (err) => {
+            if (err) reject(err);
+            else resolve(null);
+          }
+        );
+      });
+      logger.debug('Cached country code for IP:', ip);
+    } else {
+      logger.debug('Could not resolve country code from any service');
+    }
+
     return countryCode;
   } catch (error) {
     logger.error('Error getting country code:', error);
@@ -437,7 +557,7 @@ io.on('connection', (socket) => {
     try {
       // Prioritize client-provided public IP, otherwise try to get it
       const publicIP = public_ip || await getPublicIP(socket);
-      const countryCode = publicIP ? getCountryCode(publicIP) : null;
+      const countryCode = publicIP ? await getCountryCode(publicIP) : null;
       
       logger.debug(`Client ${hostname} registration details:`, {
         socketId: socket.id,
@@ -1230,7 +1350,6 @@ app.get('/api/monitored-clients', (req, res) => {
         FROM clients
         GROUP BY hostname
         HAVING MAX(lastSeen)
-      )
       ) c ON c.hostname = mc.hostname
     ORDER BY mc.sort_order DESC, mc.created_at ASC
   `;
