@@ -80,17 +80,17 @@ echo "Installing PM2..."
 sudo npm install pm2 -g
 
 # Create work directory and download files
-WORK_DIR="$HOME/astro-monitor"
-# mkdir -p "$WORK_DIR"
-# cd "$WORK_DIR"
+WORK_DIR="$HOME/astro-monitor-client"
+mkdir -p "$WORK_DIR"
+cd "$WORK_DIR"
 
-# echo "Downloading files..."
-# curl -L -o client.zip https://github.com/wanghui5801/A-server/archive/main.zip
-# unzip -q client.zip
-# mv A-server-main/client .
-# mv A-server-main/package.json .
-# mv A-server-main/tsconfig.client.json .
-# rm -rf A-server-main client.zip
+echo "Downloading files..."
+curl -L -o client.zip https://github.com/wanghui5801/A-server/archive/main.zip
+unzip -q client.zip
+mv A-server-main/client .
+mv A-server-main/package.json .
+mv A-server-main/tsconfig.client.json .
+rm -rf A-server-main client.zip
 
 # Create configuration file
 echo "Creating configuration file..."
