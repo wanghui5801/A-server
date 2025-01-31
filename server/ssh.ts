@@ -83,7 +83,7 @@ export const setupSSHServer = (app: Express) => {
 
       res.json({ success: true });
     } catch (err) {
-      res.status(401).json({ error: '认证失败' });
+      res.status(401).json({ error: 'Authentication failed' });
     }
   });
 

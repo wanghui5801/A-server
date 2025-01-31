@@ -16,7 +16,6 @@
   <p>A comprehensive server monitoring system built with Astro + React, providing real-time monitoring capabilities for multiple servers.</p>
 </div>
 
-
 ## Quick Start Guide
 
 ### System Requirements

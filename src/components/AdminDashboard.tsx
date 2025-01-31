@@ -813,7 +813,7 @@ const AdminDashboard: React.FC = () => {
 
   const confirmDeletePingTarget = async (id: number, target: string) => {
     try {
-      // 1. 删除 Ping 配置
+      // 1. Delete Ping configuration
       const response = await fetch(`${getApiUrl()}/api/ping-config/${id}`, {
         method: 'DELETE',
       });
@@ -822,7 +822,7 @@ const AdminDashboard: React.FC = () => {
         throw new Error('Failed to delete ping target');
       }
 
-      // 2. 清理相关的历史数据
+      // 2. Clean up related historical data
       const cleanupResponse = await fetch(`${getApiUrl()}/api/ping-config/${id}/cleanup`, {
         method: 'POST',
       });
@@ -831,11 +831,11 @@ const AdminDashboard: React.FC = () => {
         console.error('Failed to cleanup ping history data');
       }
 
-      // 3. 更新本地状态
+      // 3. Update local state
       setClients(prevClients => 
         prevClients.map(client => ({
           ...client,
-          // 清除与该 ping 配置相关的历史数据
+          // Clear historical data related to this ping configuration
           ping_history: client.ping_history?.filter(history => history.target !== target) || []
         }))
       );
@@ -869,7 +869,7 @@ const AdminDashboard: React.FC = () => {
         return client;
       }));
       
-      // 关闭确认弹窗
+      // Close confirmation modal
       setIsDeleteTagModalOpen(false);
     } catch (error) {
       console.error('Error deleting tag:', error);
@@ -929,7 +929,7 @@ const AdminDashboard: React.FC = () => {
         throw new Error('Failed to add tag');
       }
 
-      // 更新本地状态
+      // Update local state
       setClients(prevClients => 
         prevClients.map(client => 
           client.hostname === selectedClient
@@ -1029,7 +1029,7 @@ const AdminDashboard: React.FC = () => {
             </path>
           </svg>
         </div>
-        <div className="mt-4 text-gray-400 text-sm font-medium loading-pulse">加载中</div>
+        <div className="mt-4 text-gray-400 text-sm font-medium loading-pulse">Loading...</div>
       </div>
     );
   }
