@@ -77,7 +77,7 @@ fi
 
 # Install PM2 globally
 echo "Installing PM2..."
-sudo npm install pm2@5.3.1 -g
+sudo npm install pm2 -g
 
 # Create work directory and download files
 WORK_DIR="$HOME/astro-monitor"
