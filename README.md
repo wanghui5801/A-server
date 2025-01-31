@@ -1,8 +1,17 @@
 <div align="center">
-  <h1>
-    <img src="./public/monitor-icon.svg" width="40" height="40" alt="Server Monitor Icon" style="vertical-align: middle; margin-right: 10px" />
-    Server Monitoring System
-  </h1>
+  <div style="display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 24px;">
+    <img src="./public/monitor-icon.svg" width="48" height="48" alt="Server Monitor Icon" />
+    <span style="font-size: 48px; font-weight: bold;">Server Monitoring System</span>
+  </div>
+
+  <p>
+    <img src="https://img.shields.io/badge/Astro-3.0+-blueviolet.svg?logo=astro" alt="Astro Version" />
+    <img src="https://img.shields.io/badge/React-18.0+-blue.svg?logo=react" alt="React Version" />
+    <img src="https://img.shields.io/badge/Node.js-20.0+-green.svg?logo=node.js" alt="Node.js Version" />
+    <img src="https://img.shields.io/badge/TypeScript-5.0+-blue.svg?logo=typescript" alt="TypeScript Version" />
+    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License" />
+  </p>
+  
   <p>A comprehensive server monitoring system built with Astro + React, providing real-time monitoring capabilities for multiple servers.</p>
 </div>
 
