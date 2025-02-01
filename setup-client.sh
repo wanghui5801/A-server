@@ -26,32 +26,20 @@ install_node() {
                 "ubuntu"|"debian")
                     # Ubuntu/Debian systems
                     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-                    sudo apt-get install -y nodejs make gcc g++ python3 python3-pip unzip tcptraceroute bc
-                    # Install tcping
-                    sudo curl -sSL http://www.vdberg.org/~richard/tcpping -o /usr/bin/tcping
-                    sudo chmod 755 /usr/bin/tcping
+                    sudo apt-get install -y nodejs make gcc g++ python3 python3-pip unzip
                     ;;
                 "centos"|"rhel"|"fedora")
                     # CentOS/RHEL/Fedora systems
                     curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-                    sudo yum install -y nodejs make gcc gcc-c++ python3 python3-pip unzip tcptraceroute
-                    # Install tcping
-                    sudo curl -sSL http://www.vdberg.org/~richard/tcpping -o /usr/bin/tcping
-                    sudo chmod 755 /usr/bin/tcping
+                    sudo yum install -y nodejs make gcc gcc-c++ python3 python3-pip unzip
                     ;;
                 "opensuse"|"sles")
                     # OpenSUSE systems
                     sudo zypper install -y nodejs20 make gcc gcc-c++ python3 python3-pip unzip
-                    # Install tcping
-                    sudo curl -sSL http://www.vdberg.org/~richard/tcpping -o /usr/bin/tcping
-                    sudo chmod 755 /usr/bin/tcping
                     ;;
                 "arch"|"manjaro")
                     # Arch Linux/Manjaro systems
                     sudo pacman -Sy --noconfirm nodejs npm make gcc python3 python-pip unzip
-                    # Install tcping
-                    sudo curl -sSL http://www.vdberg.org/~richard/tcpping -o /usr/bin/tcping
-                    sudo chmod 755 /usr/bin/tcping
                     ;;
                 *)
                     echo "Unsupported Linux distribution: $ID"
@@ -75,6 +63,33 @@ install_node() {
     fi
 }
 
+# Install tcping and dependencies
+install_tcping() {
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        if [ -f /etc/os-release ]; then
+            . /etc/os-release
+            case "$ID" in
+                "ubuntu"|"debian")
+                    sudo apt-get install -y tcptraceroute bc
+                    ;;
+                "centos"|"rhel"|"fedora")
+                    sudo yum install -y tcptraceroute bc
+                    ;;
+                "opensuse"|"sles"|"arch"|"manjaro")
+                    sudo zypper install -y bc
+                    ;;
+            esac
+            
+            # Install tcping script
+            echo "Installing tcping..."
+            sudo wget -O /usr/local/bin/tcping http://www.vdberg.org/~richard/tcpping
+            sudo chmod +x /usr/local/bin/tcping
+            # Create symlink to /usr/bin for compatibility
+            sudo ln -sf /usr/local/bin/tcping /usr/bin/tcping
+        fi
+    fi
+}
+
 # Check Node.js version
 if ! command -v node &> /dev/null; then
     echo "Node.js is not installed. Installing Node.js 20..."
@@ -86,6 +101,10 @@ else
         install_node
     fi
 fi
+
+# Install tcping and its dependencies
+echo "Installing tcping and dependencies..."
+install_tcping
 
 # Install PM2 globally
 echo "Installing PM2..."
