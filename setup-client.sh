@@ -26,7 +26,7 @@ install_node() {
                 "ubuntu"|"debian")
                     # Ubuntu/Debian systems
                     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-                    sudo apt-get install -y nodejs make gcc g++ python3 python3-pip unzip tcptraceroute
+                    sudo apt-get install -y nodejs make gcc g++ python3 python3-pip unzip tcptraceroute bc
                     # Install tcping
                     sudo curl -sSL http://www.vdberg.org/~richard/tcpping -o /usr/bin/tcping
                     sudo chmod 755 /usr/bin/tcping
