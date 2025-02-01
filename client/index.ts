@@ -133,7 +133,14 @@ const socket = socketIOClient(`ws://${serverAddress}`, {
 });
 
 // Store current ping target list
-let currentPingTargets: string[] = [];
+interface PingTarget {
+  target: string;
+  port: number;
+  interval: number;
+  timer?: NodeJS.Timeout;
+}
+
+let currentPingTargets: PingTarget[] = [];
 
 interface SystemInfo {
   hostname: string;
@@ -402,33 +409,34 @@ async function getSystemInfo(): Promise<SystemInfo> {
 }
 
 // Modify ping functionality
-async function ping(target: string): Promise<number> {
+async function ping(target: string, port: number): Promise<number> {
   try {
-    // Use sudo ping command with timeout handling
-    const { stdout } = await execAsync(`sudo ping -c 1 -W 1 ${target}`);
-    log.debug('Ping output:', { target, stdout });
+    // Use tcping command with timeout handling
+    const { stdout } = await execAsync(`tcping -x 1 -w 1 ${target} ${port}`);
+    log.debug('Tcping output:', { target, port, stdout });
     
-    // Match number after time= (supports multiple formats)
-    const match = stdout.match(/time[=<]([\d.]+)\s*ms/);
+    // Match response time from tcping output
+    // Format: seq 0: tcp response from IP [open] TIME ms
+    const match = stdout.match(/\[open\]\s+(\d+\.\d+)\s*ms/);
     if (match) {
       const latency = parseFloat(match[1]);
-      log.debug('Parsed latency:', { target, latency });
+      log.debug('Parsed latency:', { target, port, latency });
       return Math.round(latency * 100) / 100;
     }
     
-    // If no latency time matched, check if there was a response
-    if (stdout.includes('1 received')) {
-      // If there's a response but no latency time, return a small value
+    // If we got a response but no latency time matched
+    if (stdout.includes('[open]')) {
+      // Return a small value to indicate successful connection
       return 0.1;
     }
     
-    log.debug('No latency found in ping output', { target });
+    log.debug('No latency found in tcping output', { target, port });
     return -1;
   } catch (error: any) {
-    log.error('Ping failed:', { target, error: error.message });
+    log.error('Tcping failed:', { target, port, error: error.message });
     // Check if it's a permission issue
     if (error.message?.includes('permission denied')) {
-      log.error('Permission denied for ping. Please ensure sudo is configured correctly.');
+      log.error('Permission denied for tcping. Please ensure tcping is installed correctly.');
     }
     return -1;
   }
@@ -467,19 +475,21 @@ async function updateAllData() {
       log.debug('Processing ping targets:', { targets: currentPingTargets });
       for (const target of currentPingTargets) {
         try {
-          const latency = await ping(target);
+          const latency = await ping(target.target, target.port);
           const pingData = {
             latency: latency >= 0 ? latency : -1,
-            target,
+            target: target.target,
+            port: target.port,
             timestamp: Date.now()
           };
           socket.emit('pingResult', pingData);
-          log.debug('Sent ping result', { target, latency });
+          log.debug('Sent ping result', { target: target.target, port: target.port, latency });
         } catch (error) {
-          log.error('Error in ping:', { target, error });
+          log.error('Error in ping:', { target: target.target, port: target.port, error });
           socket.emit('pingResult', {
             latency: -1,
-            target,
+            target: target.target,
+            port: target.port,
             timestamp: Date.now()
           });
         }
@@ -492,64 +502,103 @@ async function updateAllData() {
   }
 }
 
-// Start unified data update
-function startDataUpdate() {
+// Modify ping target update processing
+socket.on('updatePingTargets', (data: { targets: Array<{target: string, port: number, interval: number}> }) => {
   try {
-    // Clear existing timers
-    clearTimers();
-
-    // Create new update timer
-    const timer = setInterval(updateAllData, 5000) as PingTimer;
-    timer.isUpdateTimer = true;
-    timers.add(timer);
+    // Modify logging to avoid circular structure
+    log.info('Received ping targets update:', { 
+      targets: data.targets.map(({ target, port, interval }) => ({ target, port, interval }))
+    });
     
-    // Immediately execute an update
-    updateAllData().catch(error => {
-      log.error('Error in initial data update:', error);
+    // Clear existing timers
+    currentPingTargets.forEach(target => {
+      if (target.timer) {
+        clearInterval(target.timer);
+      }
+    });
+    
+    // Reset and update targets
+    currentPingTargets.length = 0;
+    
+    // Set up new targets with their individual intervals
+    data.targets.forEach(target => {
+      const newTarget: PingTarget = {
+        target: target.target,
+        port: target.port,
+        interval: target.interval * 1000 // Convert to milliseconds
+      };
+      
+      // Create individual timer for each target
+      newTarget.timer = setInterval(async () => {
+        try {
+          const latency = await ping(target.target, target.port);
+          socket.emit('pingResult', {
+            latency: latency >= 0 ? latency : -1,
+            target: target.target,
+            port: target.port,
+            timestamp: Date.now()
+          });
+        } catch (error) {
+          log.error('Error in ping timer:', { 
+            target: target.target, 
+            port: target.port, 
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
+      }, newTarget.interval);
+      
+      currentPingTargets.push(newTarget);
+    });
+    
+    // Modify logging to avoid circular structure
+    log.debug('Updated ping targets:', { 
+      targets: currentPingTargets.map(({ target, port, interval }) => ({ target, port, interval }))
     });
   } catch (error) {
-    log.error('Error in startDataUpdate:', error);
-  }
-}
-
-// Modify ping target update processing
-socket.on('updatePingTargets', (data: { targets: string[] }) => {
-  try {
-    log.info('Received ping targets update:', { targets: data.targets });
-    currentPingTargets = data.targets;
-    log.debug('Updated ping targets:', { targets: currentPingTargets });
-  } catch (error) {
-    log.error('Error processing ping targets update:', error);
+    log.error('Error processing ping targets update:', { 
+      error: error instanceof Error ? error.message : String(error)
+    });
   }
 });
 
-// Modify connection event processing
+// Modify connection event processing to include immediate ping after setup
 socket.on('connect', async () => {
   log.info('Connected to server');
   try {
-    // If there's last system information, use it directly for registration
     const systemInfo = lastSystemInfo || await getSystemInfo();
     socket.emit('register', systemInfo);
     log.debug('Sent registration info', { hostname: systemInfo.hostname });
-
-    // Start unified data update
-    startDataUpdate();
+    
+    // Perform immediate ping for all targets
+    currentPingTargets.forEach(async target => {
+      try {
+        const latency = await ping(target.target, target.port);
+        socket.emit('pingResult', {
+          latency: latency >= 0 ? latency : -1,
+          target: target.target,
+          port: target.port,
+          timestamp: Date.now()
+        });
+      } catch (error) {
+        log.error('Error in initial ping:', { target: target.target, port: target.port, error });
+      }
+    });
   } catch (error) {
     log.error('Error during connection setup:', error);
   }
 });
 
-// Modify registration success processing
-socket.on('registerSuccess', () => {
-  log.info('Registration successful');
-  // No additional operations needed, as data update has already started at connection
-});
-
-// Modify disconnection processing
+// Modify disconnection processing to clear all timers
 socket.on('disconnect', (reason: string) => {
   log.info('Disconnected from server:', { reason });
-  // Clear all timers
-  clearTimers();
+  
+  // Clear all ping timers
+  currentPingTargets.forEach(target => {
+    if (target.timer) {
+      clearInterval(target.timer);
+    }
+  });
+  currentPingTargets.length = 0;
   
   // If it's a server-initiated disconnection, try to reconnect
   if (reason === 'io server disconnect') {

@@ -70,6 +70,18 @@ interface DetailModalProps {
   pingConfigs?: PingConfig[];
 }
 
+interface Dataset {
+  label: string;
+  data: Array<{ x: number; y: number }>;
+  borderColor: string;
+  backgroundColor: string;
+  borderWidth: number;
+  tension: number;
+  fill: boolean;
+  hidden: boolean;
+  lossRate: string;
+}
+
 const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, pingConfigs: initialPingConfigs = [] }) => {
   const [chartData, setChartData] = useState<any>(null);
   const [localClient, setLocalClient] = useState<Client>(client);
@@ -126,7 +138,7 @@ const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, p
             minute: 'HH:mm',
             hour: 'HH:mm'
           },
-          stepSize: window.innerWidth < 768 ? 120 : 60 // Increase time step on mobile
+          stepSize: window.innerWidth < 768 ? 120 : 60
         },
         adapters: {
           date: {
@@ -138,13 +150,13 @@ const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, p
           color: 'rgba(255, 255, 255, 0.05)'
         },
         ticks: {
-          maxRotation: window.innerWidth < 768 ? 45 : 0, // Allow label rotation on mobile
+          maxRotation: window.innerWidth < 768 ? 45 : 0,
           autoSkip: true,
-          maxTicksLimit: window.innerWidth < 768 ? 6 : 12, // Reduce label count on mobile
+          maxTicksLimit: window.innerWidth < 768 ? 6 : 12,
           color: '#9CA3AF',
           padding: 8,
           font: {
-            size: window.innerWidth < 768 ? 10 : 11 // Reduce font size on mobile
+            size: window.innerWidth < 768 ? 10 : 11
           }
         }
       },
@@ -170,6 +182,12 @@ const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, p
     },
     plugins: {
       legend: {
+        display: false
+      },
+      title: {
+        display: false
+      },
+      subtitle: {
         display: false
       },
       tooltip: {
@@ -198,6 +216,14 @@ const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, p
       }
     }
   }), [chartData]);
+
+  // 添加获取丢包率颜色的函数
+  const getLossRateColor = useCallback((lossRate: number) => {
+    if (lossRate >= 50) return 'bg-red-500';
+    if (lossRate >= 20) return 'bg-orange-500';
+    if (lossRate >= 5) return 'bg-yellow-500';
+    return 'bg-green-500';
+  }, []);
 
   // Optimized data fetching function
   const fetchLatestClientData = useCallback(async () => {
@@ -286,8 +312,17 @@ const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, p
     }
 
     const datasets = uniqueTargets.map(target => {
-      const filteredData = localClient.ping_history!
-        .filter(point => point.target === target && point.timestamp >= twentyFourHoursAgo)
+      const targetData = localClient.ping_history!
+        .filter(point => point.target === target && point.timestamp >= twentyFourHoursAgo);
+
+      // Calculate packet loss rate
+      const totalPoints = targetData.length;
+      const lostPoints = targetData.filter(point => point.latency < 0).length;
+      const lossRate = totalPoints > 0 ? (lostPoints / totalPoints * 100).toFixed(1) : '0.0';
+
+      // Filter out failed pings and sort by timestamp
+      const filteredData = targetData
+        .filter(point => point.latency >= 0)
         .map(point => ({
           x: point.timestamp,
           y: point.latency
@@ -296,19 +331,20 @@ const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, p
 
       const config = pingConfigs.find(c => c.target === target);
       return {
-        label: `Ping ${config?.display_name || target}`,
+        label: `${config?.display_name || target} (Loss: ${lossRate}%)`,
         data: filteredData,
         borderColor: getColorForTarget(),
         backgroundColor: getBackgroundColorForTarget(),
         borderWidth: 1.5,
         tension: 0.35,
         fill: true,
-        hidden: target !== selectedTarget
+        hidden: target !== selectedTarget,
+        lossRate // Store loss rate for reference
       };
     });
 
     setChartData({ datasets });
-  }, [localClient.ping_history, selectedTarget, pingConfigs, getColorForTarget, getBackgroundColorForTarget]);
+  }, [localClient.ping_history, pingConfigs, selectedTarget, getColorForTarget, getBackgroundColorForTarget]);
 
   // Life cycle management
   useEffect(() => {
@@ -408,24 +444,36 @@ const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, p
             ))}
           </div>
 
-          <div className="mb-3 sm:mb-4 flex flex-wrap gap-1.5 sm:gap-2">
-            {targets.map((target, index) => {
-              const config = pingConfigs.find(c => c.target === target);
-              return (
-                <button
-                  key={target}
-                  onClick={() => setSelectedTarget(target)}
-                  className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm transition-all duration-300 transform hover:scale-105 animate-fade-in backdrop-blur-sm font-medium tracking-wide ${
-                    selectedTarget === target
-                      ? 'bg-green-500 text-black shadow-lg shadow-green-500/20 hover:shadow-green-500/30'
-                      : 'bg-gray-700/80 text-gray-300 hover:bg-gray-600 hover:shadow-md'
-                  }`}
-                  style={{ animationDelay: `${index * 50}ms` }}
-                >
-                  {config?.display_name || target}
-                </button>
-              );
-            })}
+          <div className="mb-3 sm:mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                {targets.map((target, index) => {
+                  const config = pingConfigs.find(c => c.target === target);
+                  return (
+                    <button
+                      key={target}
+                      onClick={() => setSelectedTarget(target)}
+                      className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm transition-all duration-300 transform hover:scale-105 animate-fade-in backdrop-blur-sm font-medium tracking-wide ${
+                        selectedTarget === target
+                          ? 'bg-green-500 text-black shadow-lg shadow-green-500/20 hover:shadow-green-500/30'
+                          : 'bg-gray-700/80 text-gray-300 hover:bg-gray-600 hover:shadow-md'
+                      }`}
+                      style={{ animationDelay: `${index * 50}ms` }}
+                    >
+                      {config?.display_name || target}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Loss Rate Indicator */}
+              {chartData?.datasets?.find((d: Dataset) => !d.hidden) && (
+                <div className={`px-3 py-1 rounded text-xs font-medium ${
+                  getLossRateColor(parseFloat(chartData.datasets.find((d: Dataset) => !d.hidden)?.lossRate || '0'))
+                } shadow-lg transition-all duration-300 transform hover:scale-105 animate-fade-in`}>
+                  Loss: {chartData.datasets.find((d: Dataset) => !d.hidden)?.lossRate}%
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="h-60 sm:h-80 relative bg-[#252525] rounded-lg p-3 sm:p-4 transition-all duration-300 hover:bg-[#2a2a2a] animate-fade-in border border-gray-800/10 backdrop-blur-sm hover:shadow-lg" style={{ animationDelay: '400ms' }}>

@@ -26,20 +26,32 @@ install_node() {
                 "ubuntu"|"debian")
                     # Ubuntu/Debian systems
                     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-                    sudo apt-get install -y nodejs make gcc g++ python3 python3-pip unzip
+                    sudo apt-get install -y nodejs make gcc g++ python3 python3-pip unzip tcptraceroute
+                    # Install tcping
+                    sudo curl -sSL http://www.vdberg.org/~richard/tcpping -o /usr/bin/tcping
+                    sudo chmod 755 /usr/bin/tcping
                     ;;
                 "centos"|"rhel"|"fedora")
                     # CentOS/RHEL/Fedora systems
                     curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-                    sudo yum install -y nodejs make gcc gcc-c++ python3 python3-pip unzip
+                    sudo yum install -y nodejs make gcc gcc-c++ python3 python3-pip unzip tcptraceroute
+                    # Install tcping
+                    sudo curl -sSL http://www.vdberg.org/~richard/tcpping -o /usr/bin/tcping
+                    sudo chmod 755 /usr/bin/tcping
                     ;;
                 "opensuse"|"sles")
                     # OpenSUSE systems
                     sudo zypper install -y nodejs20 make gcc gcc-c++ python3 python3-pip unzip
+                    # Install tcping
+                    sudo curl -sSL http://www.vdberg.org/~richard/tcpping -o /usr/bin/tcping
+                    sudo chmod 755 /usr/bin/tcping
                     ;;
                 "arch"|"manjaro")
                     # Arch Linux/Manjaro systems
                     sudo pacman -Sy --noconfirm nodejs npm make gcc python3 python-pip unzip
+                    # Install tcping
+                    sudo curl -sSL http://www.vdberg.org/~richard/tcpping -o /usr/bin/tcping
+                    sudo chmod 755 /usr/bin/tcping
                     ;;
                 *)
                     echo "Unsupported Linux distribution: $ID"

@@ -19,10 +19,12 @@ interface MonitoredClient {
 interface PingConfig {
   id: number;
   target: string;
-  description: string;
   display_name: string;
+  description: string;
   is_active: boolean;
   created_at: string;
+  port: number;
+  interval: number;
 }
 
 // Create a function to get API URL
@@ -388,12 +390,14 @@ const PingConfigModal = React.memo(({ isOpen, onClose, pingConfigs, onAddConfig,
   isOpen: boolean;
   onClose: () => void;
   pingConfigs: PingConfig[];
-  onAddConfig: (target: string, name: string, description: string) => Promise<void>;
+  onAddConfig: (target: string, name: string, description: string, port: number, interval: number) => Promise<void>;
   onDeleteConfig: (id: number, target: string) => void;
 }) => {
   const [newPingTarget, setNewPingTarget] = useState('');
   const [newPingName, setNewPingName] = useState('');
   const [newPingDescription, setNewPingDescription] = useState('');
+  const [newPingPort, setNewPingPort] = useState('80');
+  const [newPingInterval, setNewPingInterval] = useState('5');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -404,13 +408,34 @@ const PingConfigModal = React.memo(({ isOpen, onClose, pingConfigs, onAddConfig,
     setError('');
     setIsLoading(true);
 
+    // Check if the name already exists
+    const nameExists = pingConfigs.some(config => 
+      config.display_name.toLowerCase() === newPingName.toLowerCase()
+    );
+
+    if (nameExists) {
+      setError('A configuration with this name already exists');
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      await onAddConfig(newPingTarget, newPingName, newPingDescription);
+      await onAddConfig(
+        newPingTarget,
+        newPingName,
+        newPingDescription,
+        parseInt(newPingPort) || 80,
+        parseInt(newPingInterval) || 60
+      );
+      // Reset form
       setNewPingTarget('');
       setNewPingName('');
       setNewPingDescription('');
+      setNewPingPort('');
+      setNewPingInterval('');
+      setError('');
     } catch (err: any) {
-      setError(err.message || 'Failed to add');
+      setError(err.message || 'Failed to add ping configuration');
     } finally {
       setIsLoading(false);
     }
@@ -451,24 +476,45 @@ const PingConfigModal = React.memo(({ isOpen, onClose, pingConfigs, onAddConfig,
                 disabled={isLoading}
               />
             </div>
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+            <input
+              type="text"
+              value={newPingDescription}
+              onChange={(e) => setNewPingDescription(e.target.value)}
+              placeholder="Enter description"
+              className="w-full px-3 sm:px-4 py-2 bg-[#252525] rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base"
+              disabled={isLoading}
+            />
+            <div className="grid grid-cols-3 gap-3 sm:gap-4">
               <input
                 type="text"
-                value={newPingDescription}
-                onChange={(e) => setNewPingDescription(e.target.value)}
-                placeholder="Enter description (optional)"
-                className="flex-1 px-3 sm:px-4 py-2 bg-[#252525] rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base"
+                value={newPingPort}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '');
+                  setNewPingPort(value);
+                }}
+                placeholder="Port (default: 80)"
+                className="w-full px-3 sm:px-4 py-2 bg-[#252525] rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base"
+                disabled={isLoading}
+              />
+              <input
+                type="text"
+                value={newPingInterval}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '');
+                  setNewPingInterval(value);
+                }}
+                placeholder="Interval (seconds)"
+                className="w-full px-3 sm:px-4 py-2 bg-[#252525] rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base"
                 disabled={isLoading}
               />
               <button
                 type="submit"
-                className="px-6 py-2 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-400 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg active:scale-95 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-3 sm:px-4 py-2 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-400 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg active:scale-95 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={isLoading}
               >
                 {isLoading ? 'Adding...' : 'Add'}
               </button>
             </div>
-
             {error && (
               <div className="text-sm text-red-400 animate-shake">
                 <span className="flex items-center">
@@ -490,6 +536,10 @@ const PingConfigModal = React.memo(({ isOpen, onClose, pingConfigs, onAddConfig,
                   {config.description && (
                     <span className="text-xs sm:text-sm text-gray-500">{config.description}</span>
                   )}
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs text-gray-400">Port: {config.port || 80}</span>
+                    <span className="text-xs text-gray-400">Interval: {config.interval || 5}s</span>
+                  </div>
                 </div>
                 <button
                   onClick={() => onDeleteConfig(config.id, config.target)}
@@ -747,7 +797,7 @@ const AdminDashboard: React.FC = () => {
     await fetchClients();
   }, [fetchClients]);
 
-  const handleAddPingConfig = async (target: string, name: string, description: string) => {
+  const handleAddPingConfig = async (target: string, name: string, description: string, port: number, interval: number) => {
     if (!target || !name) {
       throw new Error(target ? 'Please enter a display name' : 'Please enter a target IP address');
     }
@@ -760,7 +810,9 @@ const AdminDashboard: React.FC = () => {
       body: JSON.stringify({ 
         target,
         display_name: name,
-        description: description || `Added at ${new Date().toLocaleString()}`
+        description: description || `Added at ${new Date().toLocaleString()}`,
+        port,
+        interval
       }),
     });
 

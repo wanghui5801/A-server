@@ -275,10 +275,12 @@ db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS ping_config (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     target TEXT NOT NULL,
+    display_name TEXT,
     description TEXT,
     is_active BOOLEAN DEFAULT true,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    display_name TEXT
+    port INTEGER DEFAULT 80,
+    interval INTEGER DEFAULT 5,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`, (err) => {
     if (err) {
       console.error('Error creating ping_config table:', err);
@@ -295,6 +297,7 @@ db.serialize(() => {
       hostname TEXT,
       latency REAL,
       target TEXT,
+      port INTEGER,
       timestamp INTEGER,
       FOREIGN KEY (client_id) REFERENCES clients(id)
     )
@@ -316,12 +319,10 @@ db.serialize(() => {
   // Create client_tags table
   db.run(`
     CREATE TABLE IF NOT EXISTS client_tags (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      hostname TEXT NOT NULL,
-      tag TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (hostname) REFERENCES monitored_clients(hostname) ON DELETE CASCADE,
-      UNIQUE(hostname, tag)
+      hostname TEXT,
+      tag TEXT,
+      PRIMARY KEY (hostname, tag),
+      FOREIGN KEY (hostname) REFERENCES monitored_clients(hostname) ON DELETE CASCADE
     )
   `);
 
@@ -705,7 +706,7 @@ io.on('connection', (socket) => {
   });
 
   // Handle ping result
-  socket.on('pingResult', async (data: { latency: number, target: string }) => {
+  socket.on('pingResult', async (data: { latency: number, target: string, port: number }) => {
     try {
       const timestamp = Date.now();
       
@@ -722,25 +723,25 @@ io.on('connection', (socket) => {
         return;
       }
 
-        // Save ping history record
+      // Save ping history record with port
       await new Promise((resolve, reject) => {
-          db.run(
-            'INSERT INTO ping_history (client_id, hostname, latency, target, timestamp) VALUES (?, ?, ?, ?, ?)',
-            [socket.id, client.hostname, data.latency, data.target, timestamp],
-            (err) => {
-              if (err) reject(err);
-              else resolve(null);
-            }
-          );
-        });
+        db.run(
+          'INSERT INTO ping_history (client_id, hostname, latency, target, port, timestamp) VALUES (?, ?, ?, ?, ?, ?)',
+          [socket.id, client.hostname, data.latency, data.target, data.port, timestamp],
+          (err) => {
+            if (err) reject(err);
+            else resolve(null);
+          }
+        );
+      });
 
       // Clean up data older than 24 hours
-            const oneDayAgo = timestamp - 24 * 60 * 60 * 1000;
-        await new Promise((resolve, reject) => {
-          db.run('DELETE FROM ping_history WHERE timestamp < ?', [oneDayAgo], (err) => {
-              if (err) reject(err);
-              else resolve(null);
-          });
+      const oneDayAgo = timestamp - 24 * 60 * 60 * 1000;
+      await new Promise((resolve, reject) => {
+        db.run('DELETE FROM ping_history WHERE timestamp < ?', [oneDayAgo], (err) => {
+          if (err) reject(err);
+          else resolve(null);
+        });
       });
 
       // Update client's latest ping data
@@ -1519,16 +1520,15 @@ async function getCurrentPingTarget(): Promise<string> {
 }
 
 // Get all active ping targets
-async function getActivePingTargets(): Promise<string[]> {
+async function getActivePingTargets(): Promise<Array<{target: string, port: number, interval: number}>> {
   return new Promise((resolve, reject) => {
-    db.all('SELECT target FROM ping_config WHERE is_active = true ORDER BY id ASC', [], (err, rows: any[]) => {
+    db.all('SELECT target, port, interval FROM ping_config WHERE is_active = true ORDER BY id ASC', [], (err, rows: any[]) => {
       if (err) {
         logger.error('Error getting ping targets:', err);
-        resolve([]); // No longer return default value, return empty array
+        resolve([]); 
       } else {
-        const targets = rows.map(row => row.target);
-        logger.info('Active ping targets:', targets);
-        resolve(targets);
+        logger.info('Active ping targets:', rows);
+        resolve(rows);
       }
     });
   });
@@ -1545,30 +1545,82 @@ app.get('/api/ping-config', (req, res) => {
   });
 });
 
-app.post('/api/ping-config', (req, res) => {
-  const { target, description, display_name } = req.body;
+app.post('/api/ping-config', async (req, res) => {
+  const { target, description = '', display_name = '', port = 80, interval = 5 } = req.body;
   if (!target) {
-    res.status(400).json({ error: 'Target IP is required' });
+    res.status(400).json({ error: 'Target host is required' });
     return;
   }
 
-  // Validate IP address format
+  // Validate target format (IP address or domain name)
   const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-  if (!ipRegex.test(target)) {
-    return res.status(400).json({ error: 'Invalid IP address format' });
+  const domainRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+  
+  if (!ipRegex.test(target) && !domainRegex.test(target)) {
+    return res.status(400).json({ error: 'Invalid target format. Please enter a valid IP address or domain name' });
   }
 
-  db.run(
-    'INSERT INTO ping_config (target, description, display_name) VALUES (?, ?, ?)',
-    [target, description, display_name],
-    function(err) {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
-      }
-      res.json({ id: this.lastID });
-    }
-  );
+  // Validate port and interval
+  if (port < 1 || port > 65535) {
+    return res.status(400).json({ error: 'Port must be between 1 and 65535' });
+  }
+
+  if (interval < 1) {
+    return res.status(400).json({ error: 'Interval must be at least 1 second' });
+  }
+
+  try {
+    // Start transaction
+    await new Promise((resolve, reject) => {
+      db.run('BEGIN TRANSACTION', (err) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
+
+    // Insert new configuration
+    const result = await new Promise<number>((resolve, reject) => {
+      db.run(
+        'INSERT INTO ping_config (target, description, display_name, port, interval) VALUES (?, ?, ?, ?, ?)',
+        [target, description, display_name, port, interval],
+        function(err) {
+          if (err) reject(err);
+          else resolve(this.lastID);
+        }
+      );
+    });
+
+    // Commit transaction
+    await new Promise((resolve, reject) => {
+      db.run('COMMIT', (err) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
+
+    // Get updated ping targets
+    const pingTargets = await getActivePingTargets();
+    
+    // Notify all connected clients to update their ping targets
+    io.emit('updatePingTargets', { targets: pingTargets });
+    
+    // Log the update
+    logger.info('New ping configuration added and clients notified:', {
+      newTarget: target,
+      port,
+      interval,
+      allTargets: pingTargets
+    });
+
+    res.json({ id: result });
+  } catch (err) {
+    // If error occurs, rollback transaction
+    await new Promise((resolve) => {
+      db.run('ROLLBACK', () => resolve(null));
+    });
+    logger.error('Error adding ping configuration:', err);
+    res.status(500).json({ error: 'Failed to add ping configuration' });
+  }
 });
 
 app.put('/api/ping-config/:id', (req, res) => {
@@ -1638,9 +1690,17 @@ app.delete('/api/ping-config/:id', (req, res) => {
         });
       });
 
-      // Notify all clients to update ping target
+      // Get updated ping targets
       const pingTargets = await getActivePingTargets();
+      
+      // Notify all connected clients to update their ping targets
       io.emit('updatePingTargets', { targets: pingTargets });
+      
+      // Log the update
+      logger.info('Ping configuration deleted and clients notified:', {
+        deletedTarget: target,
+        remainingTargets: pingTargets
+      });
 
       res.json({ success: true });
     } catch (err) {
