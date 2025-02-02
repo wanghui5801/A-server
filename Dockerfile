@@ -187,7 +187,7 @@ EOF
 RUN chmod +x /app/start.sh
 
 # Expose ports
-EXPOSE 3000 8080
+EXPOSE 8080
 
 # Start services
 CMD ["/app/start.sh"] 

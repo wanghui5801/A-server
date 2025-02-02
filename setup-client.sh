@@ -166,7 +166,7 @@ echo "Creating configuration file..."
 cat > client/config.json << 'EOL'
 {
   "hostname": "${HOSTNAME}",
-  "serverUrl": "http://${SERVER_IP}:3000"
+  "serverUrl": "http://${SERVER_IP}:8080"
 }
 EOL
 
@@ -181,7 +181,7 @@ npm install
 echo "Starting application with PM2..."
 # Escape the hostname for the command line
 ESCAPED_HOSTNAME=$(printf '%q' "$HOSTNAME")
-pm2 start "npx tsx client/index.ts \"$SERVER_IP:3000\" $ESCAPED_HOSTNAME" --name "astro-monitor-client"
+pm2 start "npx tsx client/index.ts \"$SERVER_IP:8080\" $ESCAPED_HOSTNAME" --name "astro-monitor-client"
 
 # Configure PM2 service
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then

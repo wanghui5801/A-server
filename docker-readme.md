@@ -15,13 +15,11 @@ docker pull xhh1128/a-server:latest
 # Run the container
 docker run -d \
   -p 8080:8080 \
-  -p 3000:3000 \
   --name a-server-container \
   xhh1128/a-server:latest
 
 # Access the application
-# Frontend: http://localhost:8080
-# API: http://localhost:3000
+# Frontend and API: http://localhost:8080
 ```
 
 ## Features
@@ -49,8 +47,7 @@ docker run -d \
 
 ## Ports
 
-- `8080`: Frontend and API gateway
-- `3000`: Backend API service
+- `8080`: Frontend and API service
 
 ## Source Code
 

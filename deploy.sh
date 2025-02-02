@@ -186,7 +186,7 @@ setup_nginx() {
     # Create configuration file
     sudo tee /etc/nginx/sites-available/astro-monitor <<EOF
 server {
-    listen 5000;
+    listen 8080;
     server_name ${SERVER_IP};
 
     # Enable URL decoding
@@ -298,8 +298,8 @@ check_service() {
     fi
     
     # Check ports
-    if ! netstat -tuln | grep -q ":5000 "; then
-        echo -e "${YELLOW}Error: Port 5000 is not listening${NC}"
+    if ! netstat -tuln | grep -q ":8080 "; then
+        echo -e "${YELLOW}Error: Port 8080 is not listening${NC}"
         exit 1
     fi
     
@@ -330,8 +330,8 @@ main() {
     check_service
     
     echo -e "${GREEN}Deployment completed!${NC}"
-    echo -e "${GREEN}Service is running on port 5000${NC}"
-    echo -e "${GREEN}You can access it at http://${SERVER_IP}:5000${NC}"
+    echo -e "${GREEN}Service is running on port 8080${NC}"
+    echo -e "${GREEN}You can access it at http://${SERVER_IP}:8080${NC}"
     echo ""
     echo -e "${YELLOW}View service status:${NC}"
     echo "Frontend logs: pm2 logs a-server-frontend"

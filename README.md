@@ -29,7 +29,7 @@
 
 ```bash
 docker pull xhh1128/a-server:latest
-docker run -d -p 8080:8080 -p 3000:3000 --name a-server-container xhh1128/a-server:latest
+docker run -d -p 8080:8080 --name a-server-container xhh1128/a-server:latest
 ```
 
 Access the monitoring dashboard at `http://localhost:8080`
@@ -42,7 +42,7 @@ chmod +x deploy.sh
 ./deploy.sh
 ```
 
-Access the monitoring dashboard at `http://<your-server-ip>:5000`
+Access the monitoring dashboard at `http://<your-server-ip>:8080`
 
 ### 3. Client Installation
 
@@ -129,11 +129,11 @@ The installation scripts will automatically:
 ```bash
 # Using pre-built image
 docker pull xhh1128/a-server:latest
-docker run -d -p 8080:8080 -p 3000:3000 --name a-server-container xhh1128/a-server:latest
+docker run -d -p 8080:8080 --name a-server-container xhh1128/a-server:latest
 
 # Or build your own image
 docker build -t a-server .
-docker run -d -p 8080:8080 -p 3000:3000 --name a-server-container a-server
+docker run -d -p 8080:8080 --name a-server-container a-server
 ```
 
 ### Manual Deployment
@@ -146,8 +146,7 @@ chmod +x deploy.sh
 
 ## Configuration
 
-- Frontend port: 8080 (configurable)
-- Backend API port: 3000 (configurable)
+- Frontend and API port: 8080 (configurable)
 - Environment variables can be configured in `.env` file
 
 ## License

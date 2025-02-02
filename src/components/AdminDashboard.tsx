@@ -1161,27 +1161,6 @@ const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => copySetupCommand(client.hostname)}
-                      className="bg-green-500/80 text-white px-2 py-0.5 rounded-md text-xs hover:bg-green-400 transition-colors font-medium tracking-wide flex items-center space-x-1"
-                      title="Copy setup command"
-                    >
-                      {copySuccess === client.hostname ? (
-                        <>
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          <span>Copied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                          </svg>
-                          <span>Setup</span>
-                        </>
-                      )}
-                    </button>
                     <input
                       type="number"
                       value={client.sort_order}
@@ -1237,9 +1216,32 @@ const AdminDashboard: React.FC = () => {
                       IP: <span className="text-gray-300">{client.public_ip || 'Retrieving...'}</span>
                     </span>
                     {client.last_seen && (
-                      <span className="text-gray-500">
-                        Last seen: {new Date(client.last_seen).toLocaleString()}
-                      </span>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-500">
+                          Last seen: {new Date(client.last_seen).toLocaleString()}
+                        </span>
+                        <button
+                          onClick={() => copySetupCommand(client.hostname)}
+                          className="bg-green-500/80 text-white px-2 py-0.5 rounded-md text-xs hover:bg-green-400 transition-colors font-medium tracking-wide flex items-center space-x-1"
+                          title="Copy setup command"
+                        >
+                          {copySuccess === client.hostname ? (
+                            <>
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              <span>Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                              </svg>
+                              <span>Setup</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
