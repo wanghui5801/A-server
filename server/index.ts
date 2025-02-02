@@ -545,7 +545,62 @@ async function getCountryCode(ip: string): Promise<string | null> {
   }
 }
 
-// Socket.IO connection handling
+// Add cache for ping targets to prevent unnecessary updates
+let cachedPingTargets: Array<{target: string, port: number, interval: number}> | null = null;
+let lastPingTargetsUpdate = 0;
+const PING_CACHE_TTL = 5000; // 5 seconds TTL
+
+// Get all active ping targets with caching
+async function getActivePingTargets(): Promise<Array<{target: string, port: number, interval: number}>> {
+  const now = Date.now();
+  
+  // Return cached data if valid
+  if (cachedPingTargets && (now - lastPingTargetsUpdate) < PING_CACHE_TTL) {
+    return cachedPingTargets;
+  }
+
+  return new Promise((resolve, reject) => {
+    db.all(
+      'SELECT target, port, interval FROM ping_config WHERE is_active = true ORDER BY id ASC', 
+      [], 
+      (err, rows: any[]) => {
+        if (err) {
+          logger.error('Error getting ping targets:', err);
+          resolve([]); 
+        } else {
+          // Ensure interval is a number and greater than 0
+          const validatedRows = rows.map(row => ({
+            ...row,
+            interval: Math.max(1, parseInt(row.interval) || 5) // Default to 5 if invalid
+          }));
+          
+          // Update cache
+          cachedPingTargets = validatedRows;
+          lastPingTargetsUpdate = now;
+          
+          logger.debug('Updated ping targets cache:', validatedRows);
+          resolve(validatedRows);
+        }
+      }
+    );
+  });
+}
+
+// Function to send ping targets to a specific client
+async function sendPingTargetsToClient(socket: any) {
+  try {
+    const pingTargets = await getActivePingTargets();
+    socket.emit('updatePingTargets', { targets: pingTargets });
+    logger.debug('Sent ping targets to client:', { 
+      socketId: socket.id, 
+      targetsCount: pingTargets.length 
+    });
+  } catch (error) {
+    logger.error('Error sending ping targets to client:', error);
+  }
+}
+
+// Modify socket connection handling
 io.on('connection', (socket) => {
   logger.info('Client connected:', socket.id);
   let sshClient: Client | null = null;
@@ -624,14 +679,11 @@ io.on('connection', (socket) => {
       // Send registration success message
       socket.emit('registerSuccess');
       
-      // Send all active ping targets
-      const pingTargets = await getActivePingTargets();
-      logger.debug('Sending ping targets to client:', pingTargets);
-      socket.emit('updatePingTargets', { targets: pingTargets });
+      // Send ping targets only once after successful registration
+      await sendPingTargetsToClient(socket);
 
     } catch (error) {
       logger.error('Error during client registration:', error);
-      // Send error to client
       socket.emit('registrationError', { message: 'Registration failed' });
     }
   });
@@ -697,9 +749,8 @@ io.on('connection', (socket) => {
         ['online', hostname]
       );
 
-      // Ensure client has latest ping targets
-      const pingTargets = await getActivePingTargets();
-      socket.emit('updatePingTargets', { targets: pingTargets });
+      // Remove the ping targets update from here as it's not needed
+      // The client already has the targets and their timers are running
     } catch (err) {
       logger.error('Error updating system info:', err);
     }
@@ -1519,21 +1570,6 @@ async function getCurrentPingTarget(): Promise<string> {
   });
 }
 
-// Get all active ping targets
-async function getActivePingTargets(): Promise<Array<{target: string, port: number, interval: number}>> {
-  return new Promise((resolve, reject) => {
-    db.all('SELECT target, port, interval FROM ping_config WHERE is_active = true ORDER BY id ASC', [], (err, rows: any[]) => {
-      if (err) {
-        logger.error('Error getting ping targets:', err);
-        resolve([]); 
-      } else {
-        logger.info('Active ping targets:', rows);
-        resolve(rows);
-      }
-    });
-  });
-}
-
 // API endpoints
 app.get('/api/ping-config', (req, res) => {
   db.all('SELECT * FROM ping_config WHERE is_active = true', (err, rows) => {
@@ -1565,9 +1601,8 @@ app.post('/api/ping-config', async (req, res) => {
     return res.status(400).json({ error: 'Port must be between 1 and 65535' });
   }
 
-  if (interval < 1) {
-    return res.status(400).json({ error: 'Interval must be at least 1 second' });
-  }
+  // Ensure interval is a positive number
+  const validInterval = Math.max(1, parseInt(String(interval)) || 5);
 
   try {
     // Start transaction
@@ -1578,11 +1613,11 @@ app.post('/api/ping-config', async (req, res) => {
       });
     });
 
-    // Insert new configuration
+    // Insert new configuration with validated interval
     const result = await new Promise<number>((resolve, reject) => {
       db.run(
         'INSERT INTO ping_config (target, description, display_name, port, interval) VALUES (?, ?, ?, ?, ?)',
-        [target, description, display_name, port, interval],
+        [target, description, display_name, port, validInterval],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);
@@ -1598,6 +1633,9 @@ app.post('/api/ping-config', async (req, res) => {
       });
     });
 
+    // Invalidate cache
+    cachedPingTargets = null;
+    
     // Get updated ping targets
     const pingTargets = await getActivePingTargets();
     
@@ -1608,7 +1646,7 @@ app.post('/api/ping-config', async (req, res) => {
     logger.info('New ping configuration added and clients notified:', {
       newTarget: target,
       port,
-      interval,
+      interval: validInterval,
       allTargets: pingTargets
     });
 
@@ -1643,7 +1681,6 @@ app.put('/api/ping-config/:id', (req, res) => {
 app.delete('/api/ping-config/:id', (req, res) => {
   const { id } = req.params;
 
-  // Get target IP to delete
   db.get('SELECT target FROM ping_config WHERE id = ?', [id], async (err, row: any) => {
     if (err) {
       res.status(500).json({ error: err.message });
@@ -1690,18 +1727,15 @@ app.delete('/api/ping-config/:id', (req, res) => {
         });
       });
 
+      // Invalidate cache
+      cachedPingTargets = null;
+      
       // Get updated ping targets
       const pingTargets = await getActivePingTargets();
       
       // Notify all connected clients to update their ping targets
       io.emit('updatePingTargets', { targets: pingTargets });
       
-      // Log the update
-      logger.info('Ping configuration deleted and clients notified:', {
-        deletedTarget: target,
-        remainingTargets: pingTargets
-      });
-
       res.json({ success: true });
     } catch (err) {
       // If error occurs, rollback transaction

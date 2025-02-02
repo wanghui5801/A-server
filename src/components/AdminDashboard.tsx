@@ -127,77 +127,91 @@ const ChangePasswordModal = React.memo(({ isOpen, onClose }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-0">
-      <div className="bg-[#1C1C1C] rounded-lg w-full sm:w-[480px] animate-fade-in">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-0 animate-fade-in">
+      <div className="bg-[#1C1C1C] rounded-xl w-full sm:w-[480px] border border-gray-800/20 shadow-2xl animate-slide-up">
         <div className="p-4 sm:p-6">
-          <div className="flex justify-between items-center mb-4 sm:mb-6">
-            <h2 className="text-lg sm:text-2xl font-bold text-white">Change Admin Password</h2>
+          <div className="flex justify-between items-center mb-5 sm:mb-6">
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-100 hover:text-white transition-colors duration-300">Change Admin Password</h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-200 transition-colors p-1 hover:bg-gray-800/50 rounded-full"
+              className="text-gray-400 hover:text-gray-200 transition-colors duration-300 p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10 group"
             >
-              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
-            <div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="relative group">
               <input
                 type="password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 placeholder="Current Password"
-                className="w-full px-3 sm:px-4 py-2 bg-[#252525] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                className="w-full px-4 py-2.5 bg-[#252525] rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all duration-300 border border-gray-800/10 group-hover:bg-[#2a2a2a]"
                 disabled={isLoading}
               />
             </div>
-            <div>
+            <div className="relative group">
               <input
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="New Password"
-                className="w-full px-3 sm:px-4 py-2 bg-[#252525] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                className="w-full px-4 py-2.5 bg-[#252525] rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all duration-300 border border-gray-800/10 group-hover:bg-[#2a2a2a]"
                 disabled={isLoading}
               />
             </div>
-            <div>
+            <div className="relative group">
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Confirm New Password"
-                className="w-full px-3 sm:px-4 py-2 bg-[#252525] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                className="w-full px-4 py-2.5 bg-[#252525] rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all duration-300 border border-gray-800/10 group-hover:bg-[#2a2a2a]"
                 disabled={isLoading}
               />
             </div>
 
             {error && (
-              <div className="text-red-500 text-xs sm:text-sm animate-shake">
-                {error}
+              <div className="text-sm text-red-400 bg-red-400/10 px-4 py-2.5 rounded-lg border border-red-400/20 animate-shake">
+                <span className="flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {error}
+                </span>
               </div>
             )}
 
-            <button
-              type="submit"
-              className={`w-full py-2 rounded-lg font-medium transition-all duration-300 transform hover:scale-[1.02] text-sm sm:text-base ${
-                isLoading
-                  ? 'bg-blue-400 cursor-not-allowed opacity-80'
-                  : 'bg-blue-500 hover:bg-blue-400 hover:shadow-lg active:scale-95'
-              }`}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <div className="flex items-center justify-center space-x-2">
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  <span>Processing...</span>
-                </div>
-              ) : (
-                'Change Password'
-              )}
-            </button>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-gray-400 hover:text-gray-200 transition-colors duration-300 rounded-lg hover:bg-gray-800/50 backdrop-blur-sm border border-gray-800/10"
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-500/90 text-white rounded-lg hover:bg-blue-500/80 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg shadow-blue-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm border border-blue-400/20"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Processing...
+                  </span>
+                ) : (
+                  'Change Password'
+                )}
+              </button>
+            </div>
           </form>
         </div>
       </div>
@@ -240,61 +254,68 @@ const AddTagModal = React.memo(({ isOpen, onClose, onAddTag }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-[#1C1C1C] rounded-lg p-6 w-full max-w-md">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">Add Tag</h2>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+      <div className="bg-[#1C1C1C] rounded-xl p-4 sm:p-6 w-full max-w-md border border-gray-800/20 shadow-2xl animate-slide-up">
+        <div className="flex justify-between items-center mb-5 sm:mb-6">
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-100 hover:text-white transition-colors duration-300">Add Tag</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-200 transition-colors"
+            className="text-gray-400 hover:text-gray-200 transition-colors duration-300 p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10 group"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label htmlFor="tag" className="block text-sm font-medium text-gray-400 mb-2">
-              Tag Name
-            </label>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="relative group">
             <input
               type="text"
-              id="tag"
               value={tag}
               onChange={(e) => setTag(e.target.value)}
-              className="w-full px-3 py-2 bg-[#252525] rounded text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="Enter tag name"
+              className="w-full px-4 py-2.5 bg-[#252525] rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/50 transition-all duration-300 border border-gray-800/10 group-hover:bg-[#2a2a2a]"
+              disabled={isLoading}
             />
           </div>
 
           {error && (
-            <div className="mb-4 text-sm text-red-400">
-              <span className="flex items-center">
-                <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            <div className="text-sm text-red-400 bg-red-400/10 px-4 py-2.5 rounded-lg border border-red-400/20 animate-shake">
+              <span className="flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 {error}
               </span>
             </div>
           )}
 
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="mr-3 px-4 py-2 text-gray-400 hover:text-gray-200 transition-colors"
+              className="px-4 py-2 text-gray-400 hover:text-gray-200 transition-colors duration-300 rounded-lg hover:bg-gray-800/50 backdrop-blur-sm border border-gray-800/10"
               disabled={isLoading}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-400 transition-colors disabled:opacity-50"
+              className="px-4 py-2 bg-green-500/90 text-white rounded-lg hover:bg-green-500/80 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg shadow-green-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm border border-green-400/20"
               disabled={isLoading}
             >
-              {isLoading ? 'Adding...' : 'Add'}
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Adding...
+                </span>
+              ) : (
+                'Add Tag'
+              )}
             </button>
           </div>
         </form>
@@ -331,53 +352,71 @@ const AddClientModal = React.memo(({ isOpen, onClose, onAddClient }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-0">
-      <div className="bg-[#1C1C1C] rounded-lg w-full sm:w-[480px] animate-fade-in">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-0 animate-fade-in">
+      <div className="bg-[#1C1C1C] rounded-xl w-full sm:w-[480px] border border-gray-800/20 shadow-2xl animate-slide-up">
         <div className="p-4 sm:p-6">
-          <div className="flex justify-between items-center mb-4 sm:mb-6">
-            <h2 className="text-lg sm:text-2xl font-bold text-white">Add Monitoring Client</h2>
+          <div className="flex justify-between items-center mb-5 sm:mb-6">
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-100 hover:text-white transition-colors duration-300">Add Monitoring Client</h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-200 transition-colors p-1 hover:bg-gray-800/50 rounded-full"
+              className="text-gray-400 hover:text-gray-200 transition-colors duration-300 p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10 group"
             >
-              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
-            <div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="relative group">
               <input
                 type="text"
                 value={newHostname}
                 onChange={(e) => setNewHostname(e.target.value)}
                 placeholder="Enter hostname"
-                className="w-full px-3 sm:px-4 py-2 bg-[#252525] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base"
+                className="w-full px-4 py-2.5 bg-[#252525] rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/50 transition-all duration-300 border border-gray-800/10 group-hover:bg-[#2a2a2a]"
                 disabled={isLoading}
               />
             </div>
 
             {error && (
-              <div className="text-red-500 text-xs sm:text-sm animate-shake">
-                {error}
+              <div className="text-sm text-red-400 bg-red-400/10 px-4 py-2.5 rounded-lg border border-red-400/20 animate-shake">
+                <span className="flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {error}
+                </span>
               </div>
             )}
 
-            <button
-              type="submit"
-              className="w-full px-4 py-2 text-sm sm:text-base bg-green-500 text-white font-medium rounded-lg hover:bg-green-400 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg active:scale-95"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <div className="flex items-center justify-center space-x-2">
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  <span>Adding...</span>
-                </div>
-              ) : (
-                'Add'
-              )}
-            </button>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-gray-400 hover:text-gray-200 transition-colors duration-300 rounded-lg hover:bg-gray-800/50 backdrop-blur-sm border border-gray-800/10"
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-green-500/90 text-white rounded-lg hover:bg-green-500/80 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg shadow-green-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm border border-green-400/20"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Adding...
+                  </span>
+                ) : (
+                  'Add Client'
+                )}
+              </button>
+            </div>
           </form>
         </div>
       </div>
@@ -385,7 +424,7 @@ const AddClientModal = React.memo(({ isOpen, onClose, onAddClient }: {
   );
 });
 
-// Ping Configuration Modal Component
+// Ping Config Modal Component
 const PingConfigModal = React.memo(({ isOpen, onClose, pingConfigs, onAddConfig, onDeleteConfig }: {
   isOpen: boolean;
   onClose: () => void;
@@ -442,84 +481,113 @@ const PingConfigModal = React.memo(({ isOpen, onClose, pingConfigs, onAddConfig,
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-0">
-      <div className="bg-[#1C1C1C] rounded-lg w-full sm:w-auto max-w-2xl animate-fade-in">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-0 animate-fade-in">
+      <div className="bg-[#1C1C1C] rounded-xl w-full sm:w-auto max-w-2xl border border-gray-800/20 shadow-2xl animate-slide-up">
         <div className="p-4 sm:p-6">
-          <div className="flex justify-between items-center mb-4 sm:mb-6">
-            <h2 className="text-lg sm:text-2xl font-bold text-white">Ping Configuration Management</h2>
+          <div className="flex justify-between items-center mb-5 sm:mb-6">
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-100 hover:text-white transition-colors duration-300">Ping Configuration Management</h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-200 transition-colors p-1 hover:bg-gray-800/50 rounded-full"
+              className="text-gray-400 hover:text-gray-200 transition-colors duration-300 p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10 group"
             >
-              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
+          <form onSubmit={handleSubmit} className="space-y-4 mb-5 sm:mb-6">
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-              <input
-                type="text"
-                value={newPingTarget}
-                onChange={(e) => setNewPingTarget(e.target.value)}
-                placeholder="Enter target IP address"
-                className="flex-1 px-3 sm:px-4 py-2 bg-[#252525] rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base"
-                disabled={isLoading}
-              />
-              <input
-                type="text"
-                value={newPingName}
-                onChange={(e) => setNewPingName(e.target.value)}
-                placeholder="Enter display name"
-                className="flex-1 px-3 sm:px-4 py-2 bg-[#252525] rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base"
-                disabled={isLoading}
-              />
+              <div className="relative group flex-1">
+                <input
+                  type="text"
+                  value={newPingTarget}
+                  onChange={(e) => setNewPingTarget(e.target.value)}
+                  placeholder="Enter target IP address"
+                  className="w-full px-4 py-2.5 bg-[#252525] rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/50 transition-all duration-300 border border-gray-800/10 group-hover:bg-[#2a2a2a]"
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="relative group flex-1">
+                <input
+                  type="text"
+                  value={newPingName}
+                  onChange={(e) => setNewPingName(e.target.value)}
+                  placeholder="Enter display name"
+                  className="w-full px-4 py-2.5 bg-[#252525] rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/50 transition-all duration-300 border border-gray-800/10 group-hover:bg-[#2a2a2a]"
+                  disabled={isLoading}
+                />
+              </div>
             </div>
-            <input
-              type="text"
-              value={newPingDescription}
-              onChange={(e) => setNewPingDescription(e.target.value)}
-              placeholder="Enter description"
-              className="w-full px-3 sm:px-4 py-2 bg-[#252525] rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base"
-              disabled={isLoading}
-            />
-            <div className="grid grid-cols-3 gap-3 sm:gap-4">
-              <input
-                type="text"
-                value={newPingPort}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, '');
-                  setNewPingPort(value);
-                }}
-                placeholder="Port (default: 80)"
-                className="w-full px-3 sm:px-4 py-2 bg-[#252525] rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base"
-                disabled={isLoading}
-              />
-              <input
-                type="text"
-                value={newPingInterval}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, '');
-                  setNewPingInterval(value);
-                }}
-                placeholder="Interval (seconds)"
-                className="w-full px-3 sm:px-4 py-2 bg-[#252525] rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm sm:text-base"
-                disabled={isLoading}
-              />
+
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+              <div className="relative group flex-1">
+                <input
+                  type="text"
+                  value={newPingDescription}
+                  onChange={(e) => setNewPingDescription(e.target.value)}
+                  placeholder="Enter description (optional)"
+                  className="w-full px-4 py-2.5 bg-[#252525] rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/50 transition-all duration-300 border border-gray-800/10 group-hover:bg-[#2a2a2a]"
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="relative group flex-1">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={newPingPort}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '');
+                    setNewPingPort(value);
+                  }}
+                  placeholder="Port"
+                  className="w-full px-4 py-2.5 bg-[#252525] rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/50 transition-all duration-300 border border-gray-800/10 group-hover:bg-[#2a2a2a]"
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="relative group flex-1">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={newPingInterval}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '');
+                    setNewPingInterval(value);
+                  }}
+                  placeholder="Interval"
+                  className="w-full px-4 py-2.5 bg-[#252525] rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/50 transition-all duration-300 border border-gray-800/10 group-hover:bg-[#2a2a2a]"
+                  disabled={isLoading}
+                />
+              </div>
               <button
                 type="submit"
-                className="w-full px-3 sm:px-4 py-2 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-400 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg active:scale-95 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-2.5 bg-green-500/90 text-white rounded-lg hover:bg-green-500/80 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg shadow-green-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm border border-green-400/20 whitespace-nowrap"
                 disabled={isLoading}
               >
-                {isLoading ? 'Adding...' : 'Add'}
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Adding...
+                  </span>
+                ) : (
+                  'Add Config'
+                )}
               </button>
             </div>
+
             {error && (
-              <div className="text-sm text-red-400 animate-shake">
-                <span className="flex items-center">
-                  <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              <div className="text-sm text-red-400 bg-red-400/10 px-4 py-2.5 rounded-lg border border-red-400/20 animate-shake">
+                <span className="flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   {error}
                 </span>
@@ -527,23 +595,26 @@ const PingConfigModal = React.memo(({ isOpen, onClose, pingConfigs, onAddConfig,
             )}
           </form>
 
-          <div className="space-y-2 max-h-[40vh] sm:max-h-[60vh] overflow-y-auto">
+          <div className="space-y-2.5 max-h-[40vh] sm:max-h-[60vh] overflow-y-auto">
             {pingConfigs.map((config) => (
-              <div key={config.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-[#252525] p-3 rounded-lg gap-2 sm:gap-0">
-                <div className="flex flex-col">
-                  <span className="text-sm sm:text-base text-gray-300">{config.display_name || config.target}</span>
-                  <span className="text-xs sm:text-sm text-gray-500">{config.target}</span>
+              <div 
+                key={config.id} 
+                className="flex flex-col sm:flex-row sm:items-center justify-between bg-[#252525] p-4 rounded-lg gap-3 sm:gap-4 transition-all duration-300 hover:bg-[#2a2a2a] group border border-gray-800/10 hover:shadow-lg"
+              >
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm sm:text-base text-gray-200 group-hover:text-white transition-colors duration-300 font-medium">{config.display_name || config.target}</span>
+                  <span className="text-xs sm:text-sm text-gray-400 group-hover:text-gray-300 transition-colors duration-300">{config.target}</span>
                   {config.description && (
-                    <span className="text-xs sm:text-sm text-gray-500">{config.description}</span>
+                    <span className="text-xs sm:text-sm text-gray-500 group-hover:text-gray-400 transition-colors duration-300">{config.description}</span>
                   )}
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-gray-400">Port: {config.port || 80}</span>
-                    <span className="text-xs text-gray-400">Interval: {config.interval || 5}s</span>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-xs text-gray-400 group-hover:text-gray-300 transition-colors duration-300 bg-gray-700/50 px-2 py-0.5 rounded">Port: {config.port || 80}</span>
+                    <span className="text-xs text-gray-400 group-hover:text-gray-300 transition-colors duration-300 bg-gray-700/50 px-2 py-0.5 rounded">Interval: {config.interval || 5}s</span>
                   </div>
                 </div>
                 <button
                   onClick={() => onDeleteConfig(config.id, config.target)}
-                  className="px-3 py-1 rounded text-xs sm:text-sm bg-red-500 hover:bg-red-600 text-white self-end sm:self-auto"
+                  className="px-4 py-2 bg-red-500/90 text-white rounded-lg hover:bg-red-500/80 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg shadow-red-500/20 active:scale-95 backdrop-blur-sm border border-red-400/20 self-end sm:self-auto"
                 >
                   Delete
                 </button>
@@ -566,35 +637,35 @@ const ConfirmDialog = React.memo(({ isOpen, onClose, onConfirm, title, message }
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-0">
-      <div className="bg-[#1C1C1C] rounded-lg w-full sm:w-auto max-w-md animate-fade-in">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-0 animate-fade-in">
+      <div className="bg-[#1C1C1C] rounded-xl w-full sm:w-auto max-w-md border border-gray-800/20 shadow-2xl animate-slide-up">
         <div className="p-4 sm:p-6">
-          <div className="flex justify-between items-center mb-4 sm:mb-6">
-            <h2 className="text-lg sm:text-2xl font-bold text-white">{title}</h2>
+          <div className="flex justify-between items-center mb-5 sm:mb-6">
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-100 hover:text-white transition-colors duration-300">{title}</h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-200 transition-colors p-1 hover:bg-gray-800/50 rounded-full"
+              className="text-gray-400 hover:text-gray-200 transition-colors duration-300 p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10 group"
             >
-              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
 
-          <p className="text-sm sm:text-base text-gray-300 mb-6">{message}</p>
+          <p className="text-sm sm:text-base text-gray-300 mb-6 leading-relaxed">{message}</p>
 
           <div className="flex justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm sm:text-base text-gray-400 hover:text-gray-200 transition-colors rounded-lg hover:bg-gray-800/50"
+              className="px-4 py-2 text-gray-400 hover:text-gray-200 transition-colors duration-300 rounded-lg hover:bg-gray-800/50 backdrop-blur-sm border border-gray-800/10"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={onConfirm}
-              className="px-4 py-2 text-sm sm:text-base bg-red-500 text-white rounded-lg hover:bg-red-400 transition-colors active:scale-95 transform duration-200"
+              className="px-4 py-2 bg-red-500/90 text-white rounded-lg hover:bg-red-500/80 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg shadow-red-500/20 active:scale-95 backdrop-blur-sm border border-red-400/20"
             >
               Confirm Delete
             </button>
@@ -1091,45 +1162,47 @@ const AdminDashboard: React.FC = () => {
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-12 animate-fade-in">
         <div className="mb-6 sm:mb-8">
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-0">
-              <div className="flex items-center">
-                <svg className="w-6 h-6 sm:w-8 sm:h-8 mr-2 sm:mr-3 text-gray-300 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} 
-                    d="M6.5 12h2l2-6 3 18 2.5-12h2" />
-                  <path strokeLinecap="round" strokeWidth={1.5}
-                    d="M3 12h2M19 12h2" />
-                  <path strokeLinecap="round" strokeWidth={1.5} opacity="0.5"
-                    d="M1 12h1M22 12h1" />
-                  <circle cx="12" cy="12" r="9" strokeWidth={1.5} opacity="0.2" />
-                  <circle cx="12" cy="12" r="5" strokeWidth={1.5} opacity="0.4" />
-                </svg>
-                <h1 className="text-2xl sm:text-4xl font-medium tracking-tight text-gray-300 animate-slide-down">Management</h1>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-6">
+              <div className="flex items-center group">
+                <div className="relative mr-3 sm:mr-4">
+                  <svg className="w-6 h-6 sm:w-8 sm:h-8 text-gray-300/90 transition-all duration-300 group-hover:scale-105 group-hover:text-gray-200/90" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} 
+                      d="M6.5 12h2l2-6 3 18 2.5-12h2" />
+                    <path strokeLinecap="round" strokeWidth={1.5}
+                      d="M3 12h2M19 12h2" />
+                    <path strokeLinecap="round" strokeWidth={1.5} opacity="0.5"
+                      d="M1 12h1M22 12h1" />
+                    <circle cx="12" cy="12" r="9" strokeWidth={1.5} opacity="0.2" className="animate-pulse" />
+                    <circle cx="12" cy="12" r="5" strokeWidth={1.5} opacity="0.3" />
+                  </svg>
+                </div>
+                <h1 className="text-2xl sm:text-4xl font-medium tracking-tight text-gray-200 transition-colors duration-300 group-hover:text-gray-100">Management</h1>
               </div>
-              <div className="grid grid-cols-2 sm:flex gap-2 sm:gap-4">
+              <div className="grid grid-cols-2 sm:flex gap-2.5 sm:gap-3">
                 <a
                   href="/"
-                  className="flex items-center justify-center px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-700/80 text-white rounded-lg hover:bg-gray-600 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg active:scale-95 text-sm sm:text-base font-medium tracking-wide"
+                  className="flex items-center justify-center px-3.5 sm:px-4 py-2 sm:py-2.5 bg-gray-700/80 text-white rounded-lg hover:bg-gray-600/90 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg active:scale-95 backdrop-blur-sm text-sm sm:text-base font-medium tracking-wide border border-gray-600/10 group"
                 >
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 transition-transform duration-300 group-hover:rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                   </svg>
-                  Back to Home
+                  <span className="relative">Back to Home</span>
                 </a>
                 <button
                   onClick={() => setIsChangePasswordModalOpen(true)}
-                  className="px-3 sm:px-4 py-1.5 sm:py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-400 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg active:scale-95 text-sm sm:text-base font-medium tracking-wide"
+                  className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-yellow-500/90 text-white rounded-lg hover:bg-yellow-400/90 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg active:scale-95 text-sm sm:text-base font-medium tracking-wide border border-yellow-400/10 backdrop-blur-sm"
                 >
                   Change Password
                 </button>
                 <button
                   onClick={() => setIsAddClientModalOpen(true)}
-                  className="px-3 sm:px-4 py-1.5 sm:py-2 bg-green-500 text-white rounded-lg hover:bg-green-400 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg active:scale-95 text-sm sm:text-base font-medium tracking-wide"
+                  className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-green-500/90 text-white rounded-lg hover:bg-green-400/90 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg active:scale-95 text-sm sm:text-base font-medium tracking-wide border border-green-400/10 backdrop-blur-sm"
                 >
                   Add Client
                 </button>
                 <button
                   onClick={() => setIsPingConfigModalOpen(true)}
-                  className="px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-400 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg active:scale-95 text-sm sm:text-base font-medium tracking-wide"
+                  className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-blue-500/90 text-white rounded-lg hover:bg-blue-400/90 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg active:scale-95 text-sm sm:text-base font-medium tracking-wide border border-blue-400/10 backdrop-blur-sm"
                 >
                   Ping Config
                 </button>
@@ -1148,43 +1221,101 @@ const AdminDashboard: React.FC = () => {
           {clients.map((client, index) => (
             <div
               key={client.hostname}
-              className="bg-[#1E1E1E] rounded-lg p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between transition-all duration-300 transform hover:scale-[1.01] hover:shadow-xl animate-fade-in hover:bg-[#252525] gap-3 sm:gap-0"
+              className="bg-[#1E1E1E] rounded-xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between transition-all duration-300 transform hover:scale-[1.01] hover:shadow-xl animate-fade-in hover:bg-[#252525] gap-3 sm:gap-0 border border-gray-800/10 backdrop-blur-sm"
               style={{ animationDelay: `${index * 100}ms` }}
             >
               {/* Mobile Layout */}
-              <div className="sm:hidden flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base font-medium tracking-wide text-gray-300">{client.hostname}</span>
-                    <div className={`px-2 py-0.5 rounded-md text-xs font-medium tracking-wide ${getStatusColor(client.status)}`}>
-                      {client.status}
+              <div className="sm:hidden">
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`
+                        inline-flex items-center px-2.5 py-1 rounded text-xs font-medium tracking-wide whitespace-nowrap
+                        ${getStatusColor(client.status)}
+                        shadow-sm backdrop-blur-sm border border-gray-800/10
+                      `}>
+                        {client.status}
+                      </div>
+                      <span className="text-gray-300 font-medium text-sm tracking-wide group-hover:text-white transition-colors duration-300 truncate">
+                        {client.hostname || 'Unknown'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={client.sort_order}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          updateSortOrder(client.hostname, parseInt(e.target.value) || 0);
+                        }}
+                        className="w-14 px-2 py-1 bg-[#252525] rounded text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-green-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none font-medium border border-gray-800/10"
+                        min="0"
+                        title="Sort value (larger numbers appear first)"
+                      />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteClient(client.hostname);
+                        }}
+                        className="bg-red-500/80 text-white px-2.5 py-1 rounded text-xs hover:bg-red-400 transition-colors font-medium tracking-wide flex items-center gap-1"
+                        title="Delete client"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        Delete
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      value={client.sort_order}
-                      onChange={(e) => updateSortOrder(client.hostname, parseInt(e.target.value) || 0)}
-                      className="w-12 px-2 py-0.5 bg-[#252525] rounded text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-green-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none font-medium"
-                      min="0"
-                      title="Sort value (larger numbers appear first)"
-                    />
-                    <button
-                      onClick={() => handleDeleteClient(client.hostname)}
-                      className="bg-red-500/80 text-white px-2 py-0.5 rounded-md text-xs hover:bg-red-400 transition-colors font-medium tracking-wide"
-                      title="Delete client"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex flex-wrap items-center gap-1.5">
+                  <div className="flex flex-col text-xs space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400 flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                        </svg>
+                        <span>{client.public_ip || 'Unknown IP'}</span>
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          copySetupCommand(client.hostname);
+                        }}
+                        className="bg-green-500/80 text-white px-2.5 py-1 rounded text-xs hover:bg-green-400 transition-colors font-medium tracking-wide flex items-center gap-1.5"
+                        title="Copy setup command"
+                      >
+                        {copySuccess === client.hostname ? (
+                          <>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span>Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                            </svg>
+                            <span>Setup</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    {client.last_seen && (
+                      <span className="text-gray-500 flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {new Date(client.last_seen).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
                     {client.tags?.map((tag) => (
                       <span
                         key={tag}
-                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-200 border border-blue-500/30"
+                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-200 border border-blue-500/30 hover:bg-blue-500/30 transition-colors"
                       >
                         {tag}
                         <button
@@ -1192,7 +1323,7 @@ const AdminDashboard: React.FC = () => {
                             e.stopPropagation();
                             handleDeleteTag(client.hostname, tag);
                           }}
-                          className="ml-1 hover:text-red-300 focus:outline-none"
+                          className="ml-1.5 hover:text-red-300 focus:outline-none"
                           title="Delete tag"
                         >
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1202,58 +1333,28 @@ const AdminDashboard: React.FC = () => {
                       </span>
                     ))}
                     <button
-                      onClick={() => addTag(client.hostname)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addTag(client.hostname);
+                      }}
                       className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-colors border border-blue-500/30"
                       title="Add tag"
                     >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                       </svg>
                     </button>
-                  </div>
-                  <div className="flex flex-col text-xs space-y-0.5">
-                    <span className="text-gray-400">
-                      IP: <span className="text-gray-300">{client.public_ip || 'Retrieving...'}</span>
-                    </span>
-                    {client.last_seen && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-500">
-                          Last seen: {new Date(client.last_seen).toLocaleString()}
-                        </span>
-                        <button
-                          onClick={() => copySetupCommand(client.hostname)}
-                          className="bg-green-500/80 text-white px-2 py-0.5 rounded-md text-xs hover:bg-green-400 transition-colors font-medium tracking-wide flex items-center space-x-1"
-                          title="Copy setup command"
-                        >
-                          {copySuccess === client.hostname ? (
-                            <>
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                              <span>Copied!</span>
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                              </svg>
-                              <span>Setup</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
 
               {/* Desktop Layout */}
               <div className="hidden sm:flex sm:items-center sm:justify-between w-full">
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-5">
+                  <div className="flex items-center space-x-3">
                     <button
                       onClick={() => copySetupCommand(client.hostname)}
-                      className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-400 transition-colors flex items-center space-x-1"
+                      className="bg-green-500/90 text-white px-3 py-1.5 rounded-lg hover:bg-green-400 transition-colors flex items-center gap-1.5 font-medium tracking-wide shadow-sm hover:shadow-md"
                       title="Copy setup command"
                     >
                       {copySuccess === client.hostname ? (
@@ -1275,23 +1376,26 @@ const AdminDashboard: React.FC = () => {
                     <input
                       type="number"
                       value={client.sort_order}
-                      onChange={(e) => updateSortOrder(client.hostname, parseInt(e.target.value) || 0)}
-                      className="w-16 px-2 py-1 bg-[#252525] rounded text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        updateSortOrder(client.hostname, parseInt(e.target.value) || 0);
+                      }}
+                      className="w-16 px-2.5 py-1.5 bg-[#252525] rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       min="0"
                       title="Sort value (larger numbers appear first)"
                     />
-                    <div className={`px-2 py-1 rounded text-sm font-medium ${getStatusColor(client.status)}`}>
+                    <div className={`px-3 py-1.5 rounded-lg text-sm font-medium tracking-wide ${getStatusColor(client.status)} shadow-sm`}>
                       {client.status}
                     </div>
                   </div>
                   <div className="flex flex-col">
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-300">{client.hostname}</span>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-gray-200 font-medium tracking-wide">{client.hostname}</span>
                       <div className="flex items-center gap-2">
                         {client.tags?.map((tag) => (
                           <span
                             key={tag}
-                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/30 text-blue-200 border border-blue-500/50"
+                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/30 text-blue-200 border border-blue-500/50 hover:bg-blue-500/40 transition-colors shadow-sm"
                           >
                             {tag}
                             <button
@@ -1309,8 +1413,11 @@ const AdminDashboard: React.FC = () => {
                           </span>
                         ))}
                         <button
-                          onClick={() => addTag(client.hostname)}
-                          className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 transition-colors border border-blue-500/40"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addTag(client.hostname);
+                          }}
+                          className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 transition-colors border border-blue-500/40 shadow-sm"
                           title="Add tag"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1319,14 +1426,22 @@ const AdminDashboard: React.FC = () => {
                         </button>
                       </div>
                     </div>
-                    <span className="text-sm text-gray-500">
-                      IP: {client.public_ip || 'Retrieving...'}
-                    </span>
-                    {client.last_seen && (
-                      <span className="text-xs text-gray-600">
-                        Last seen: {new Date(client.last_seen).toLocaleString()}
+                    <div className="flex items-center gap-4 mt-1">
+                      <span className="text-sm text-gray-500 flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                        </svg>
+                        {client.public_ip || 'Retrieving...'}
                       </span>
-                    )}
+                      {client.last_seen && (
+                        <span className="text-xs text-gray-600 flex items-center gap-1.5">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          {new Date(client.last_seen).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
@@ -1338,16 +1453,22 @@ const AdminDashboard: React.FC = () => {
                       });
                       setIsSSHModalOpen(true);
                     }}
-                    className="hidden sm:block bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-400 transition-colors"
+                    className="hidden sm:flex items-center gap-1.5 bg-blue-500/90 text-white px-3 py-1.5 rounded-lg hover:bg-blue-400 transition-colors font-medium tracking-wide shadow-sm hover:shadow-md"
                     title="SSH Connection"
                   >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                    </svg>
                     SSH
                   </button>
                   <button
                     onClick={() => handleDeleteClient(client.hostname)}
-                    className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-400 transition-colors"
+                    className="flex items-center gap-1.5 bg-red-500/90 text-white px-3 py-1.5 rounded-lg hover:bg-red-400 transition-colors font-medium tracking-wide shadow-sm hover:shadow-md"
                     title="Delete client"
                   >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
                     Delete
                   </button>
                 </div>

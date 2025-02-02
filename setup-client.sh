@@ -177,6 +177,16 @@ envsubst < client/config.json > client/config.json.tmp && mv client/config.json.
 echo "Installing dependencies..."
 npm install
 
+# Configure PM2 log rotation
+echo "Configuring PM2 log rotation..."
+pm2 install pm2-logrotate
+pm2 set pm2-logrotate:max_size '10M'
+pm2 set pm2-logrotate:retain '7'
+pm2 set pm2-logrotate:compress true
+pm2 set pm2-logrotate:dateFormat 'YYYY-MM-DD_HH-mm-ss'
+pm2 set pm2-logrotate:workerInterval '3600'
+pm2 set pm2-logrotate:rotateInterval '0 0 * * *'
+
 # Start the application with PM2
 echo "Starting application with PM2..."
 # Escape the hostname for the command line

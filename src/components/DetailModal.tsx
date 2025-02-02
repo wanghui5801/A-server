@@ -217,6 +217,75 @@ const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, p
     }
   }), [chartData]);
 
+  // Optimized chart data update function
+  const updateChartData = useCallback(() => {
+    if (!localClient.ping_history) return;
+
+    const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
+    
+    // Sort pingConfigs by creation time and get targets in order
+    const sortedPingConfigs = [...pingConfigs].sort((a, b) => 
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    const orderedTargets = sortedPingConfigs.map(config => config.target);
+    
+    // Filter uniqueTargets to only include targets that exist in ping_history
+    // while maintaining the order from orderedTargets
+    const uniqueTargets = orderedTargets.filter(target => 
+      localClient.ping_history!.some(point => point.target === target)
+    );
+    
+    setTargets(uniqueTargets);
+
+    if (!selectedTarget && uniqueTargets.length > 0) {
+      setSelectedTarget(uniqueTargets[0]);
+    }
+
+    const datasets = uniqueTargets.map(target => {
+      // Get all ping data for this target in the last 24 hours
+      const targetData = localClient.ping_history!
+        .filter(point => point.target === target && point.timestamp >= twentyFourHoursAgo);
+
+      // Calculate packet loss rate
+      const totalPoints = targetData.length;
+      const lostPoints = targetData.filter(point => point.latency === -1).length;
+      const lossRate = totalPoints > 0 ? (lostPoints / totalPoints * 100).toFixed(1) : '0.0';
+
+      // Filter out failed pings for the chart display
+      const chartData = targetData
+        .map(point => ({
+          x: point.timestamp,
+          y: point.latency >= 0 ? point.latency : null // Use null for failed pings in chart
+        }))
+        .filter(point => point.y !== null) // Remove failed pings from chart display
+        .sort((a, b) => a.x - b.x);
+
+      const config = pingConfigs.find(c => c.target === target);
+      const displayName = config?.display_name || target;
+      
+      // Add more detailed loss information to the label
+      const label = totalPoints > 0
+        ? `${displayName} (${lostPoints}/${totalPoints} Loss: ${lossRate}%)`
+        : `${displayName} (No Data)`;
+
+      return {
+        label,
+        data: chartData,
+        borderColor: getColorForTarget(),
+        backgroundColor: getBackgroundColorForTarget(),
+        borderWidth: 1.5,
+        tension: 0.35,
+        fill: true,
+        hidden: target !== selectedTarget,
+        lossRate, // Store loss rate for reference
+        totalPoints,
+        lostPoints
+      };
+    });
+
+    setChartData({ datasets });
+  }, [localClient.ping_history, pingConfigs, selectedTarget, getColorForTarget, getBackgroundColorForTarget]);
+
   // 添加获取丢包率颜色的函数
   const getLossRateColor = useCallback((lossRate: number) => {
     if (lossRate >= 50) return 'bg-red-500';
@@ -287,65 +356,6 @@ const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, p
     traffic: (value?: string) => value && value !== 'Unknown' ? value : 'Unknown'
   }), []);
 
-  // Optimized chart data update function
-  const updateChartData = useCallback(() => {
-    if (!localClient.ping_history) return;
-
-    const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
-    
-    // Sort pingConfigs by creation time and get targets in order
-    const sortedPingConfigs = [...pingConfigs].sort((a, b) => 
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
-    const orderedTargets = sortedPingConfigs.map(config => config.target);
-    
-    // Filter uniqueTargets to only include targets that exist in ping_history
-    // while maintaining the order from orderedTargets
-    const uniqueTargets = orderedTargets.filter(target => 
-      localClient.ping_history!.some(point => point.target === target)
-    );
-    
-    setTargets(uniqueTargets);
-
-    if (!selectedTarget && uniqueTargets.length > 0) {
-      setSelectedTarget(uniqueTargets[0]);
-    }
-
-    const datasets = uniqueTargets.map(target => {
-      const targetData = localClient.ping_history!
-        .filter(point => point.target === target && point.timestamp >= twentyFourHoursAgo);
-
-      // Calculate packet loss rate
-      const totalPoints = targetData.length;
-      const lostPoints = targetData.filter(point => point.latency < 0).length;
-      const lossRate = totalPoints > 0 ? (lostPoints / totalPoints * 100).toFixed(1) : '0.0';
-
-      // Filter out failed pings and sort by timestamp
-      const filteredData = targetData
-        .filter(point => point.latency >= 0)
-        .map(point => ({
-          x: point.timestamp,
-          y: point.latency
-        }))
-        .sort((a, b) => a.x - b.x);
-
-      const config = pingConfigs.find(c => c.target === target);
-      return {
-        label: `${config?.display_name || target} (Loss: ${lossRate}%)`,
-        data: filteredData,
-        borderColor: getColorForTarget(),
-        backgroundColor: getBackgroundColorForTarget(),
-        borderWidth: 1.5,
-        tension: 0.35,
-        fill: true,
-        hidden: target !== selectedTarget,
-        lossRate // Store loss rate for reference
-      };
-    });
-
-    setChartData({ datasets });
-  }, [localClient.ping_history, pingConfigs, selectedTarget, getColorForTarget, getBackgroundColorForTarget]);
-
   // Life cycle management
   useEffect(() => {
     setLocalClient(client);
@@ -388,75 +398,108 @@ const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, p
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
-      <div className="bg-[#1C1C1C] rounded-lg p-4 sm:p-6 w-[calc(100%-2rem)] sm:w-full max-w-4xl h-[calc(100vh-4rem)] sm:h-auto overflow-hidden modal-enter border border-gray-800/20 mx-auto">
-        <div className="flex justify-between items-center mb-4 sm:mb-6">
-          <div className="flex items-center gap-2 sm:gap-3 animate-slide-down">
-            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-100 hover:text-white transition-colors duration-300 truncate">{client.hostname}</h2>
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-              <div className="flex items-center px-2 sm:px-3 py-1 bg-[#252525] rounded text-xs sm:text-sm text-gray-300 font-medium tracking-wide transition-all duration-300 hover:bg-opacity-80 hover:shadow-md backdrop-blur-sm whitespace-nowrap">
-                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+      <div className="bg-[#1C1C1C] rounded-xl p-4 sm:p-6 w-[calc(100%-2rem)] sm:w-full max-w-4xl h-[calc(100vh-4rem)] sm:h-auto overflow-hidden modal-enter border border-gray-800/20 mx-auto shadow-2xl">
+        <div className="flex justify-between items-center mb-5 sm:mb-6">
+          <div className="flex items-center gap-2.5 sm:gap-3 animate-slide-down">
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-100 hover:text-white transition-colors duration-300 truncate group-hover:text-white">{client.hostname}</h2>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+              <div className="flex items-center px-2.5 sm:px-3 py-1 bg-[#252525] rounded-lg text-xs sm:text-sm text-gray-300 font-medium tracking-wide transition-all duration-300 hover:bg-[#2a2a2a] hover:shadow-md backdrop-blur-sm whitespace-nowrap border border-gray-800/10 group">
+                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-blue-400/90 group-hover:text-blue-400 transition-colors duration-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                 </svg>
-                {formatters.threadCount(client.cpuModel, client.cpuThreads)}·
-                {formatters.memorySize(client.memoryTotal)}·
-                {formatters.memorySize(client.diskTotal)}
+                <span className="text-gray-200 group-hover:text-gray-100 transition-colors duration-300">{formatters.threadCount(client.cpuModel, client.cpuThreads)}·{formatters.memorySize(client.memoryTotal)}·{formatters.memorySize(client.diskTotal)}</span>
               </div>
               {client.tags?.map((tag) => (
                 <div 
                   key={tag} 
-                  className="flex items-center px-2 sm:px-3 py-1 bg-[#252525] rounded text-xs sm:text-sm text-gray-300 font-medium tracking-wide transition-all duration-300 hover:bg-opacity-80 hover:scale-105 hover:shadow-md backdrop-blur-sm whitespace-nowrap"
+                  className="flex items-center px-2.5 sm:px-3 py-1 bg-[#252525] rounded-lg text-xs sm:text-sm text-gray-300 font-medium tracking-wide transition-all duration-300 hover:bg-[#2a2a2a] hover:scale-105 hover:shadow-md backdrop-blur-sm whitespace-nowrap border border-gray-800/10 group"
                 >
-                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1 sm:mr-1.5 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1.5 sm:mr-2 text-green-400/90 group-hover:text-green-400 transition-colors duration-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                   </svg>
-                  {tag}
+                  <span className="group-hover:text-gray-100 transition-colors duration-300">{tag}</span>
                 </div>
               ))}
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-200 transition-colors duration-300 p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-full backdrop-blur-sm"
+            className="text-gray-400 hover:text-gray-200 transition-colors duration-300 p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10 group"
           >
-            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         <div className="h-[calc(100vh-10rem)] sm:h-auto overflow-y-auto hide-scrollbar">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-5 sm:mb-6">
             {[
-              { label: 'CPU Model', value: localClient.cpuModel || 'Unknown' },
-              { label: 'Uptime', value: formatters.uptime(localClient.uptime) },
-              { label: 'Download Traffic', value: formatters.traffic(localClient.networkTraffic?.rx) },
-              { label: 'Upload Traffic', value: formatters.traffic(localClient.networkTraffic?.tx) }
+              { 
+                label: 'CPU Model', 
+                value: localClient.cpuModel || 'Unknown',
+                icon: (
+                  <svg className="w-4 h-4 text-blue-400/90 group-hover:text-blue-400 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                  </svg>
+                )
+              },
+              { 
+                label: 'Uptime', 
+                value: formatters.uptime(localClient.uptime),
+                icon: (
+                  <svg className="w-4 h-4 text-green-400/90 group-hover:text-green-400 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )
+              },
+              { 
+                label: 'Download Traffic', 
+                value: formatters.traffic(localClient.networkTraffic?.rx),
+                icon: (
+                  <svg className="w-4 h-4 text-yellow-400/90 group-hover:text-yellow-400 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                )
+              },
+              { 
+                label: 'Upload Traffic', 
+                value: formatters.traffic(localClient.networkTraffic?.tx),
+                icon: (
+                  <svg className="w-4 h-4 text-yellow-400/90 group-hover:text-yellow-400 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                )
+              }
             ].map((item, index) => (
               <div 
                 key={item.label}
-                className={`${commonCardClass} transition-all duration-300 hover:bg-[#2a2a2a] transform hover:scale-[1.02] animate-fade-in hover:shadow-lg border border-gray-800/10 backdrop-blur-sm`}
+                className="bg-[#252525] p-4 rounded-lg transition-all duration-300 hover:bg-[#2a2a2a] transform hover:scale-[1.02] animate-fade-in hover:shadow-lg border border-gray-800/10 backdrop-blur-sm group"
                 style={{ animationDelay: `${index * 100}ms` }}
               >
-                <div className={`${commonLabelClass} tracking-wide`}>{item.label}</div>
-                <div className={`${commonValueClass} text-sm sm:text-base truncate font-medium tracking-wide`}>{item.value}</div>
+                <div className="text-sm text-gray-400 tracking-wide flex items-center gap-2 mb-1.5 group-hover:text-gray-300 transition-colors duration-300">
+                  {item.icon}
+                  {item.label}
+                </div>
+                <div className="text-gray-100 text-sm sm:text-base truncate font-medium tracking-wide group-hover:text-white transition-colors duration-300">{item.value}</div>
               </div>
             ))}
           </div>
 
-          <div className="mb-3 sm:mb-4">
-            <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
-              <div className="flex flex-wrap gap-1.5 sm:gap-2">
+          <div className="mb-4 sm:mb-5">
+            <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+              <div className="flex flex-wrap gap-2 sm:gap-2.5">
                 {targets.map((target, index) => {
                   const config = pingConfigs.find(c => c.target === target);
                   return (
                     <button
                       key={target}
                       onClick={() => setSelectedTarget(target)}
-                      className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm transition-all duration-300 transform hover:scale-105 animate-fade-in backdrop-blur-sm font-medium tracking-wide ${
+                      className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all duration-300 transform hover:scale-[1.02] animate-fade-in backdrop-blur-sm font-medium tracking-wide border ${
                         selectedTarget === target
-                          ? 'bg-green-500 text-black shadow-lg shadow-green-500/20 hover:shadow-green-500/30'
-                          : 'bg-gray-700/80 text-gray-300 hover:bg-gray-600 hover:shadow-md'
+                          ? 'bg-green-500/90 text-white shadow-lg shadow-green-500/20 hover:shadow-green-500/30 border-green-400/30 hover:bg-green-500/80'
+                          : 'bg-[#252525] text-gray-300 hover:bg-[#2a2a2a] hover:shadow-md border-gray-800/10 hover:text-gray-100'
                       }`}
                       style={{ animationDelay: `${index * 50}ms` }}
                     >
@@ -467,26 +510,26 @@ const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, p
               </div>
               {/* Loss Rate Indicator */}
               {chartData?.datasets?.find((d: Dataset) => !d.hidden) && (
-                <div className={`px-3 py-1 rounded text-xs font-medium ${
+                <div className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium ${
                   getLossRateColor(parseFloat(chartData.datasets.find((d: Dataset) => !d.hidden)?.lossRate || '0'))
-                } shadow-lg transition-all duration-300 transform hover:scale-105 animate-fade-in`}>
+                } shadow-lg transition-all duration-300 transform hover:scale-[1.02] animate-fade-in border border-gray-800/10 backdrop-blur-sm`}>
                   Loss: {chartData.datasets.find((d: Dataset) => !d.hidden)?.lossRate}%
                 </div>
               )}
             </div>
           </div>
 
-          <div className="h-60 sm:h-80 relative bg-[#252525] rounded-lg p-3 sm:p-4 transition-all duration-300 hover:bg-[#2a2a2a] animate-fade-in border border-gray-800/10 backdrop-blur-sm hover:shadow-lg" style={{ animationDelay: '400ms' }}>
+          <div className="h-60 sm:h-[340px] relative bg-[#252525] rounded-lg p-4 sm:p-5 transition-all duration-300 hover:bg-[#2a2a2a] animate-fade-in border border-gray-800/10 backdrop-blur-sm hover:shadow-lg group" style={{ animationDelay: '400ms' }}>
             {chartData && localClient.ping_history && localClient.ping_history.length > 0 ? (
               <Line options={chartOptions} data={chartData} />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center text-gray-400">
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2.5">
                   <svg className="animate-spin h-4 w-4 sm:h-5 sm:w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span className="text-xs sm:text-sm">Waiting for Ping data...</span>
+                  <span className="text-xs sm:text-sm font-medium group-hover:text-gray-300 transition-colors duration-300">Waiting for Ping data...</span>
                 </div>
               </div>
             )}
