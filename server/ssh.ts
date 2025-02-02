@@ -101,13 +101,20 @@ export const setupSSHServer = (app: Express) => {
     const urlString = `http://${request.headers.host}${request.url}`;
     const { pathname, searchParams } = new URL(urlString);
 
-    if (pathname === '/ssh') {
+    // Handle both development and production paths
+    if (pathname === '/ssh' || pathname === '/api/ssh') {
       wss.handleUpgrade(request, socket, head, (ws) => {
         const sshConfig: SSHConfig = {
           hostname: searchParams.get('hostname')!,
           username: searchParams.get('username')!,
           password: searchParams.get('password')!,
         };
+
+        logger.debug('SSH connection attempt:', {
+          hostname: sshConfig.hostname,
+          username: sshConfig.username,
+          path: pathname
+        });
 
         handleSSHConnection(ws, sshConfig);
       });

@@ -15,6 +15,11 @@ const getApiUrl = () => {
 const getWsUrl = () => {
   if (typeof window === 'undefined') return 'ws://localhost:3000';
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  
+  if (process.env.NODE_ENV === 'development') {
+    return `${protocol}//localhost:3000`;
+  }
+  
   return `${protocol}//${window.location.host}`;
 };
 
@@ -210,9 +215,16 @@ const SSHTerminalModal: React.FC<SSHTerminalModalProps> = ({
             terminalInstance.current = terminal;
 
             // Connect to WebSocket for SSH using dynamic URL
-            const socket = new WebSocket(`${getWsUrl()}/ssh?hostname=${clientIp}&username=${username}&password=${password}`);
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsHost = process.env.NODE_ENV === 'development' ? 'localhost:3000' : window.location.host;
+            const wsPath = process.env.NODE_ENV === 'development' ? '/ssh' : '/api/ssh';
+            const wsUrl = `${wsProtocol}//${wsHost}${wsPath}?hostname=${encodeURIComponent(clientIp)}&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+
+            console.log('Connecting to WebSocket URL:', wsUrl); // Debug log
+            const socket = new WebSocket(wsUrl);
 
             socket.onopen = () => {
+              console.log('WebSocket connection established'); // Add debug log
               terminal.writeln('\x1b[1;36mConnecting to SSH server...\x1b[0m');
               // Adapt size after successful connection
               setTimeout(fitTerminal, 100);
@@ -224,12 +236,14 @@ const SSHTerminalModal: React.FC<SSHTerminalModalProps> = ({
               terminal.write(event.data);
             };
 
-            socket.onclose = () => {
-              terminal.writeln('\r\n\x1b[1;31mConnection closed\x1b[0m');
+            socket.onerror = (error) => {
+              console.error('WebSocket error:', error); // Add detailed error log
+              terminal.writeln('\x1b[1;31mWebSocket connection error. Please check console for details.\x1b[0m');
             };
 
-            socket.onerror = (error) => {
-              terminal.writeln(`\r\n\x1b[1;31mError: ${error.type}\x1b[0m`);
+            socket.onclose = (event) => {
+              console.log('WebSocket connection closed:', event.code, event.reason); // Add detailed close log
+              terminal.writeln('\x1b[1;31mConnection closed\x1b[0m');
             };
 
             socketRef.current = socket;
