@@ -2171,6 +2171,57 @@ app.get('/api/server-info', async (req, res) => {
   }
 });
 
+// Add service name endpoints
+app.get('/api/service-name', async (req, res) => {
+  try {
+    const row = await new Promise<ServerInfoRow | null>((resolve, reject) => {
+      db.get(
+        'SELECT value FROM server_info WHERE key = ?',
+        ['service_name'],
+        (err, row) => {
+          if (err) {
+            logger.error('Error querying service name:', err);
+            reject(err);
+          } else {
+            resolve(row as ServerInfoRow | null);
+          }
+        }
+      );
+    });
+
+    res.json({ name: row?.value || 'Services' });
+  } catch (error) {
+    logger.error('Error in /api/service-name endpoint:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/service-name', async (req, res) => {
+  const { name } = req.body;
+  
+  if (!name) {
+    return res.status(400).json({ error: 'Service name is required' });
+  }
+
+  try {
+    await new Promise((resolve, reject) => {
+      db.run(
+        'INSERT OR REPLACE INTO server_info (key, value, updated_at) VALUES (?, ?, ?)',
+        ['service_name', name, Date.now()],
+        (err) => {
+          if (err) reject(err);
+          else resolve(null);
+        }
+      );
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Error updating service name:', error);
+    res.status(500).json({ error: 'Failed to update service name' });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {
   logger.info(`Server running on port ${PORT}`);

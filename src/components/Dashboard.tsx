@@ -257,22 +257,44 @@ const Dashboard: React.FC = () => {
   const [isEditNameModalOpen, setIsEditNameModalOpen] = useState(false);
   const [serviceName, setServiceName] = useState<string>('Services');
 
-  // Add this effect to handle localStorage
+  // Replace localStorage effect with API call
   useEffect(() => {
-    // Only access localStorage in browser environment
-    if (typeof window !== 'undefined') {
-      const savedName = localStorage.getItem('serviceName');
-      if (savedName) {
-        setServiceName(savedName);
+    const fetchServiceName = async () => {
+      try {
+        const response = await fetch(`${getApiUrl()}/api/service-name`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch service name');
+        }
+        const data = await response.json();
+        setServiceName(data.name);
+      } catch (error) {
+        console.error('Error fetching service name:', error);
       }
-    }
+    };
+
+    fetchServiceName();
   }, []);
 
-  // Add this function to handle service name updates
-  const handleServiceNameUpdate = useCallback((newName: string) => {
-    setServiceName(newName);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('serviceName', newName);
+  // Replace handleServiceNameUpdate with API call
+  const handleServiceNameUpdate = useCallback(async (newName: string) => {
+    try {
+      const response = await fetch(`${getApiUrl()}/api/service-name`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: newName }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update service name');
+      }
+
+      setServiceName(newName);
+    } catch (error) {
+      console.error('Error updating service name:', error);
+      // Optionally show error to user
+      setError('Failed to update service name');
     }
   }, []);
 
