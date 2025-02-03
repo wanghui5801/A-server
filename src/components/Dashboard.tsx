@@ -257,6 +257,9 @@ const Dashboard: React.FC = () => {
   const [isEditNameModalOpen, setIsEditNameModalOpen] = useState(false);
   const [serviceName, setServiceName] = useState<string>('Services');
 
+  // Add new state to track individual client updates
+  const [clientUpdateTimers] = useState<{ [key: string]: number }>({});
+
   // Replace localStorage effect with API call
   useEffect(() => {
     const fetchServiceName = async () => {
@@ -381,70 +384,81 @@ const Dashboard: React.FC = () => {
     }
   }, [connected]);
 
-  const debouncedFetchClients = useCallback(
-    (() => {
-      let timeoutId: NodeJS.Timeout;
-      return () => {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
+  // Replace debouncedFetchClients with optimized version
+  const fetchClients = useCallback(async () => {
+    try {
+      const response = await fetch(`${getApiUrl()}/api/clients`, {
+        headers: {
+          'X-Internal-Request': 'true'
         }
-        timeoutId = setTimeout(async () => {
-          try {
-            const response = await fetch(`${getApiUrl()}/api/clients`, {
-              headers: {
-                'X-Internal-Request': 'true'
-              }
-            });
-            if (!response.ok) {
-              throw new Error('Failed to fetch clients');
-            }
-            const data = await response.json();
-            
-            const clientsWithStatus = data.map((client: Client) => {
-              const previousClient = clients.find(c => c.hostname === client.hostname);
-              return processClientData(client, previousClient);
-            });
-            
-            const sortedClients = sortClients(clientsWithStatus);
-            setClients(sortedClients);
-            setLoading(false);
-            setError('');
-            setLastUpdate(Date.now());
-          } catch (err) {
-            console.error('Error fetching clients:', err);
-            setError('Failed to fetch clients');
-            setLoading(false);
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch clients');
+      }
+      const data = await response.json();
+      
+      // Process each client individually
+      const updatedClients = data.map((newClient: Client) => {
+        const previousClient = clients.find(c => c.hostname === newClient.hostname);
+        const now = Date.now();
+        
+        // Check if this client should be updated
+        if (previousClient && clientUpdateTimers[newClient.hostname]) {
+          const timeSinceLastUpdate = now - clientUpdateTimers[newClient.hostname];
+          if (timeSinceLastUpdate < 3000) {
+            return previousClient;
           }
-        }, 300);
-      };
-    })(),
-    [clients, processClientData, sortClients]
-  );
+        }
+        
+        // Update timer for this client
+        clientUpdateTimers[newClient.hostname] = now;
+        
+        return processClientData(newClient, previousClient);
+      });
+      
+      const sortedClients = sortClients(updatedClients);
+      setClients(sortedClients);
+      setLoading(false);
+      setError('');
+      setLastUpdate(Date.now());
+    } catch (err) {
+      console.error('Error fetching clients:', err);
+      setError('Failed to fetch clients');
+      setLoading(false);
+    }
+  }, [clients, processClientData, sortClients, clientUpdateTimers]);
 
-  // Add periodic updates as backup
+  // Modify useEffect for WebSocket connection
   useEffect(() => {
-    // Get initial data immediately
-    debouncedFetchClients();
+    // Get initial data
+    fetchClients();
     fetchPingConfigs();
 
-    // Set longer interval for config updates (every 30 seconds)
     const configInterval = setInterval(fetchPingConfigs, 30000);
 
-    // Set up WebSocket connection for real-time updates
+    // Set up WebSocket connection
     const socket = io(getApiUrl(), {
       transports: ['websocket'],
       path: '/socket.io'
     });
 
-    socket.on('systemInfoUpdate', () => {
-      debouncedFetchClients();
+    // Optimize systemInfoUpdate handler
+    socket.on('systemInfoUpdate', (data: { hostname: string }) => {
+      const now = Date.now();
+      const lastUpdate = clientUpdateTimers[data.hostname];
+      
+      // Only update if 3 seconds have passed for this specific client
+      if (!lastUpdate || now - lastUpdate >= 3000) {
+        clientUpdateTimers[data.hostname] = now;
+        fetchClients();
+      }
     });
 
     return () => {
       clearInterval(configInterval);
       socket.disconnect();
     };
-  }, [debouncedFetchClients, fetchPingConfigs]);
+  }, [fetchClients, fetchPingConfigs, clientUpdateTimers]);
 
   // Handle client selection
   const handleClientSelect = useCallback((client: Client) => {
@@ -472,24 +486,6 @@ const Dashboard: React.FC = () => {
   const memoizedClients = useMemo(() => {
     return clients;
   }, [clients]);
-
-  useEffect(() => {
-    if (connected) {
-      debouncedFetchClients();
-    }
-  }, [connected, debouncedFetchClients]);
-
-  // Add data update interval check
-  useEffect(() => {
-    const now = Date.now();
-    if (connected && now - lastUpdate > 10000) {
-      debouncedFetchClients();
-    }
-  }, [connected, lastUpdate, debouncedFetchClients]);
-
-  useEffect(() => {
-    fetchPingConfigs();
-  }, [fetchPingConfigs]);
 
   if (loading) {
     return loadingComponent;

@@ -701,7 +701,8 @@ async function updateSystemInfo() {
   try {
     const systemInfo = await getSystemInfo();
     lastSystemInfo = systemInfo;
-    socket.emit('systemInfo', systemInfo);
+    // Include hostname in the event data
+    socket.emit('systemInfo', { ...systemInfo, hostname: systemInfo.hostname });
     log.debug('Sent system info', { hostname: systemInfo.hostname });
   } catch (error) {
     log.error('Error updating system info:', error);
