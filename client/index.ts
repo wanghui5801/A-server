@@ -598,27 +598,73 @@ async function getSystemInfo(): Promise<SystemInfo> {
 // Ping function with timeout control
 async function ping(target: string, port: number): Promise<number> {
   return new Promise((resolve) => {
-    // Set 1 second timeout
+    // Set 1.2s timeout (slightly longer than tcping timeout)
     const timeout = setTimeout(() => {
       resolve(-1);  // Timeout returns -1 indicating packet loss
       log.debug('Ping timeout:', { target, port });
-    }, 1000);
+    }, 1200);
 
-    // Execute tcping
-    execAsync(`tcping -x 1 -w 1 ${target} ${port}`)
-      .then(({ stdout }) => {
+    // Execute tcping with proper parameters
+    // -x 1: Single attempt
+    // -w 1: Wait timeout 1 second
+    // -C: Formatted output
+    execAsync(`tcping -x 1 -w 1 -C ${target} ${port}`)
+      .then(({ stdout, stderr }) => {
         clearTimeout(timeout);
-        // Only process result if completed before timeout
-        const match = stdout.match(/\[open\]\s+(\d+\.\d+)\s*ms/);
-        if (match) {
-          const latency = parseFloat(match[1]);
+        const output = stdout.trim();
+        
+        // Debug log for output format analysis
+        log.debug('Tcping raw output:', {
+          target,
+          port,
+          stdout: output,
+          stderr: stderr.trim()
+        });
+
+        // Check for packet loss indicated by '-'
+        if (output.endsWith(' : -')) {
+          log.debug('Ping packet loss detected', {
+            target,
+            port,
+            output
+          });
+          resolve(-1);
+          return;
+        }
+
+        // Parse latency value
+        // Format: "hostname : latency"
+        const parts = output.split(' : ');
+        if (parts.length !== 2) {
+          log.debug('Invalid tcping output format', {
+            target,
+            port,
+            output
+          });
+          resolve(-1);
+          return;
+        }
+
+        const latency = parseFloat(parts[1]);
+        if (!isNaN(latency) && latency >= 0 && latency <= 5000) {
           resolve(Math.round(latency * 100) / 100);
         } else {
+          log.warn('Invalid latency value:', {
+            target,
+            port,
+            latency,
+            output
+          });
           resolve(-1);
         }
       })
-      .catch(() => {
+      .catch((error) => {
         clearTimeout(timeout);
+        log.debug('Ping execution error:', {
+          target,
+          port,
+          error: error instanceof Error ? error.message : String(error)
+        });
         resolve(-1);
       });
   });
@@ -689,7 +735,13 @@ let pingSchedules: PingSchedule[] = [];
 async function executePingWithTiming(schedule: PingSchedule): Promise<void> {
   const now = Date.now();
   const expectedTime = schedule.nextPingTime;
-  const maxDelay = Math.min(schedule.interval * 0.1, 500); // Maximum allowed delay is 500ms
+  
+  // Adjust max delay based on interval
+  // For intervals <= 1s: max delay = 20% of interval
+  // For intervals > 1s: max delay = min(500ms, 10% of interval)
+  const maxDelay = schedule.interval <= 1000 
+    ? schedule.interval * 0.2 
+    : Math.min(500, schedule.interval * 0.1);
 
   // If too late for scheduled time, record as packet loss
   if (now - expectedTime > maxDelay) {
@@ -703,7 +755,8 @@ async function executePingWithTiming(schedule: PingSchedule): Promise<void> {
       target: schedule.target,
       expectedTime: new Date(expectedTime).toISOString(),
       actualTime: new Date(now).toISOString(),
-      delay: now - expectedTime
+      delay: now - expectedTime,
+      maxAllowedDelay: maxDelay
     });
     return;
   }
@@ -714,8 +767,15 @@ async function executePingWithTiming(schedule: PingSchedule): Promise<void> {
   const endTime = Date.now();
   const executionTime = endTime - startTime;
 
-  // If execution time exceeds 80% of interval or close to next interval, record as packet loss
-  if (executionTime > Math.min(schedule.interval * 0.8, schedule.interval - 100)) {
+  // Dynamic execution time threshold based on interval
+  const maxExecutionTime = Math.min(
+    schedule.interval * 0.8,  // 80% of interval
+    schedule.interval - 100,  // Leave 100ms buffer
+    1000  // Hard cap at 1 second
+  );
+
+  // If execution time exceeds threshold, record as packet loss
+  if (executionTime > maxExecutionTime) {
     socket.emit('pingResult', {
       latency: -1,
       target: schedule.target,
@@ -725,6 +785,7 @@ async function executePingWithTiming(schedule: PingSchedule): Promise<void> {
     log.debug('Ping execution too long', {
       target: schedule.target,
       executionTime,
+      maxExecutionTime,
       interval: schedule.interval,
       expectedTime: new Date(expectedTime).toISOString()
     });
