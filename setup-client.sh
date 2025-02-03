@@ -108,7 +108,19 @@ install_tcping
 
 # Install PM2 globally
 echo "Installing PM2..."
-sudo npm install pm2 -g
+# Clean npm cache and remove existing PM2 installation
+sudo npm cache clean -f
+sudo rm -rf /usr/lib/node_modules/pm2
+sudo rm -rf /usr/local/lib/node_modules/pm2
+# Try to install PM2 with error handling
+if ! sudo npm install pm2@latest -g; then
+    echo "First PM2 installation attempt failed, trying alternative method..."
+    # Second attempt with different approach
+    if ! sudo npm install pm2@latest -g --force; then
+        echo "Error: Failed to install PM2. Please try manually with: sudo npm install pm2@latest -g --force"
+        exit 1
+    fi
+fi
 
 # Create work directory and download files
 WORK_DIR="$HOME/astro-monitor-client"

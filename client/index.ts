@@ -175,130 +175,246 @@ interface SystemInfo {
 interface CpuInfo {
   user: number;
   nice: number;
-  sys: number;
+  system: number;
   idle: number;
+  iowait: number;
   irq: number;
+  softirq: number;
+  steal: number;
 }
 
 let lastCpuInfo: CpuInfo | null = null;
 
 async function getCpuUsage(): Promise<number> {
   try {
-    // Read /proc/stat for more accurate CPU usage
     const statContent = await fs.promises.readFile('/proc/stat', 'utf8');
-    const cpuLines = statContent.split('\n').filter(line => line.startsWith('cpu'));
+    const cpuLine = statContent.split('\n').find(line => line.startsWith('cpu '));
     
-    // Get the aggregate CPU line (cpu ...)
-    const cpuLine = cpuLines[0];
+    if (!cpuLine) {
+      throw new Error('Cannot find CPU stats');
+    }
+
     const values = cpuLine.split(/\s+/).slice(1).map(Number);
     
+    // Ensure all required CPU time values exist
+    if (values.length < 8) {
+      throw new Error('Incomplete CPU stats data');
+    }
+
+    // Validate all values are valid numbers
+    if (values.some(v => isNaN(v) || v < 0)) {
+      throw new Error('Invalid CPU stats values');
+    }
+
     const current: CpuInfo = {
       user: values[0],
       nice: values[1],
-      sys: values[2],
+      system: values[2],
       idle: values[3],
-      irq: values[6]
+      iowait: values[4],
+      irq: values[5],
+      softirq: values[6],
+      steal: values[7]
     };
-    
+
     if (!lastCpuInfo) {
       lastCpuInfo = current;
-      // Wait a short interval for the first measurement
+      // Use precise time interval
       await new Promise(resolve => setTimeout(resolve, 1000));
       return getCpuUsage();
     }
+
+    const delta = {
+      user: current.user - lastCpuInfo.user,
+      nice: current.nice - lastCpuInfo.nice,
+      system: current.system - lastCpuInfo.system,
+      idle: current.idle - lastCpuInfo.idle,
+      iowait: current.iowait - lastCpuInfo.iowait,
+      irq: current.irq - lastCpuInfo.irq,
+      softirq: current.softirq - lastCpuInfo.softirq,
+      steal: current.steal - lastCpuInfo.steal
+    };
+
+    // Validate delta values
+    if (Object.values(delta).some(v => v < 0)) {
+      log.warn('CPU counter wrapped or invalid delta detected, resetting stats');
+      lastCpuInfo = current;
+      return getCpuUsage();
+    }
+
+    const totalDelta = Object.values(delta).reduce((acc, val) => acc + val, 0);
+    const activeDelta = totalDelta - delta.idle - delta.iowait;
     
-    // Calculate deltas
-    const userDiff = current.user - lastCpuInfo.user;
-    const niceDiff = current.nice - lastCpuInfo.nice;
-    const sysDiff = current.sys - lastCpuInfo.sys;
-    const idleDiff = current.idle - lastCpuInfo.idle;
-    const irqDiff = current.irq - lastCpuInfo.irq;
-    
-    // Calculate total time difference
-    const totalDiff = userDiff + niceDiff + sysDiff + idleDiff + irqDiff;
-    
-    // Calculate CPU usage percentage
-    const cpuUsage = totalDiff > 0 ? 
-      ((totalDiff - idleDiff) / totalDiff) * 100 : 0;
-    
-    // Update last info for next calculation
     lastCpuInfo = current;
+
+    if (totalDelta === 0) {
+      log.warn('No CPU activity detected');
+      return 0;
+    }
+
+    const cpuUsage = (activeDelta / totalDelta) * 100;
     
-    return Math.round(cpuUsage * 100) / 100;
+    // Log detailed CPU usage information
+    log.debug('CPU usage calculation:', {
+      total: totalDelta,
+      active: activeDelta,
+      idle: delta.idle,
+      iowait: delta.iowait,
+      usage: cpuUsage.toFixed(2) + '%'
+    });
+
+    // Ensure return value is within valid range
+    return Math.min(100, Math.max(0, Math.round(cpuUsage * 100) / 100));
+
   } catch (error) {
-    // Fallback to os.cpus() if /proc/stat is not available
-    const cpus = os.cpus();
-    const avgUsage = cpus.reduce((acc, cpu) => {
-      const total = Object.values(cpu.times).reduce((a, b) => a + b);
-      const idle = cpu.times.idle;
-      return acc + ((total - idle) / total) * 100;
-    }, 0) / cpus.length;
-    
-    return Math.round(avgUsage * 100) / 100;
+    log.error('Error getting CPU usage:', error);
+    return 0;
   }
 }
 
 // Get memory usage
 async function getMemoryUsage(): Promise<number> {
   try {
-    // Read /proc/meminfo for more accurate memory information
     const memContent = await fs.promises.readFile('/proc/meminfo', 'utf8');
     const memInfo: { [key: string]: number } = {};
-    
+
+    // Parse memory information
     memContent.split('\n').forEach(line => {
       const matches = line.match(/^(\w+):\s+(\d+)/);
       if (matches) {
-        memInfo[matches[1]] = parseInt(matches[2]);
+        const value = parseInt(matches[2]);
+        if (!isNaN(value) && value >= 0) {
+          memInfo[matches[1]] = value;
+        }
       }
     });
+
+    // Verify if required memory information exists
+    const requiredKeys = ['MemTotal', 'MemFree', 'Buffers', 'Cached', 'SReclaimable', 'Shmem'];
+    const missingKeys = requiredKeys.filter(key => !(key in memInfo));
     
-    // Calculate actual used memory (similar to htop)
-    const total = memInfo['MemTotal'] || 0;
-    const free = memInfo['MemFree'] || 0;
-    const buffers = memInfo['Buffers'] || 0;
-    const cached = memInfo['Cached'] || 0;
-    const sReclaimable = memInfo['SReclaimable'] || 0;
+    if (missingKeys.length > 0) {
+      throw new Error(`Missing required memory info: ${missingKeys.join(', ')}`);
+    }
+
+    const total = memInfo['MemTotal'];
+    const free = memInfo['MemFree'];
+    const buffers = memInfo['Buffers'];
+    const cached = memInfo['Cached'];
+    const sReclaimable = memInfo['SReclaimable'];
+    const shmem = memInfo['Shmem'];
+
+    // Validate total memory size
+    if (total <= 0) {
+      throw new Error('Invalid total memory size');
+    }
+
+    // Calculate actual memory usage
+    const used = total - free - buffers - (cached + sReclaimable) + shmem;
     
-    // Used = Total - Free - Buffers - (Cached + SReclaimable)
-    const used = total - free - buffers - (cached + sReclaimable);
+    // Validate calculation results
+    if (used < 0) {
+      log.warn('Negative memory usage calculated, possible system inconsistency');
+      return 0;
+    }
+    
+    if (used > total) {
+      log.warn('Calculated memory usage exceeds total memory, capping at 100%');
+      return 100;
+    }
+
     const usagePercentage = (used / total) * 100;
     
+    // Log detailed memory usage information
+    log.debug('Memory usage calculation:', {
+      total: `${total} KB`,
+      free: `${free} KB`,
+      buffers: `${buffers} KB`,
+      cached: `${cached} KB`,
+      sReclaimable: `${sReclaimable} KB`,
+      shmem: `${shmem} KB`,
+      used: `${used} KB`,
+      percentage: `${usagePercentage.toFixed(2)}%`
+    });
+
     return Math.round(usagePercentage * 100) / 100;
+
   } catch (error) {
-    // Fallback to os.freemem() if /proc/meminfo is not available
-    const totalMemory = os.totalmem();
-    const freeMemory = os.freemem();
-    const usagePercentage = ((totalMemory - freeMemory) / totalMemory) * 100;
-    return Math.round(usagePercentage * 100) / 100;
+    log.error('Error getting memory usage:', error);
+    return 0;
   }
 }
 
 // Get disk usage
 async function getDiskUsage(): Promise<number> {
   try {
-    // Get usage for all mount points (excluding special filesystems)
-    const { stdout } = await execAsync('df -k | grep -vE "^(tmpfs|devtmpfs|udev|none|overlay|shm)" | tail -n +2');
-    const lines = stdout.trim().split('\n');
+    // Use -l parameter to show only local filesystems, exclude network filesystems
+    const { stdout } = await execAsync(
+      'df -Pl | grep -vE "^(tmpfs|devtmpfs|udev|none|overlay|shm|snap|squashfs|rootfs|/dev/loop)"'
+    );
     
+    const lines = stdout.trim().split('\n');
+    if (lines.length <= 1) {
+      log.warn('No valid disk partitions found');
+      return 0;
+    }
+
     let totalSize = 0;
     let totalUsed = 0;
-    
-    lines.forEach(line => {
+    const mountPoints: string[] = [];
+
+    // Skip header line
+    lines.slice(1).forEach(line => {
       const parts = line.trim().split(/\s+/);
-      const size = parseInt(parts[1]); // Total size (KB)
-      const used = parseInt(parts[2]); // Used space (KB)
-      
-      if (!isNaN(size) && !isNaN(used)) {
-        totalSize += size;
-        totalUsed += used;
+      // df -P output format: Filesystem 1K-blocks Used Available Use% Mounted on
+      if (parts.length < 6) {
+        log.warn('Invalid df output format:', { line });
+        return;
       }
+
+      const filesystem = parts[0];
+      const size = parseInt(parts[1]); // Total size (1K-blocks)
+      const used = parseInt(parts[2]); // Used space (1K-blocks)
+      const mountPoint = parts[5];
+
+      // Validate numeric values
+      if (isNaN(size) || isNaN(used) || size <= 0) {
+        log.warn('Invalid disk size or usage:', { filesystem, size, used });
+        return;
+      }
+
+      // Verify used space doesn't exceed total size
+      if (used > size) {
+        log.warn('Used space exceeds total size:', { filesystem, size, used });
+        return;
+      }
+
+      totalSize += size;
+      totalUsed += used;
+      mountPoints.push(mountPoint);
+    });
+
+    // Ensure valid data exists
+    if (totalSize === 0) {
+      log.warn('No valid disk data found');
+      return 0;
+    }
+
+    const usagePercentage = (totalUsed / totalSize) * 100;
+    
+    // Log detailed disk usage information
+    log.debug('Disk usage calculation:', {
+      totalSize: `${totalSize} KB`,
+      totalUsed: `${totalUsed} KB`,
+      percentage: `${usagePercentage.toFixed(2)}%`,
+      mountPoints: mountPoints.join(', ')
     });
     
-    // Calculate total usage percentage
-    const usagePercentage = totalSize > 0 ? (totalUsed / totalSize) * 100 : 0;
-    return Math.round(usagePercentage * 100) / 100;
+    // Ensure return value is within valid range
+    return Math.min(100, Math.max(0, Math.round(usagePercentage * 100) / 100));
+
   } catch (error) {
-    console.error('Error getting disk usage:', error);
+    log.error('Error getting disk usage:', error);
     return 0;
   }
 }
@@ -306,67 +422,127 @@ async function getDiskUsage(): Promise<number> {
 // Get network traffic
 async function getNetworkTraffic(): Promise<{ rx: string; tx: string }> {
   try {
-    // Read /proc/net/dev file to get network traffic
     const netData = await fs.promises.readFile('/proc/net/dev', 'utf8');
 
-    // Parse traffic for all network interfaces (excluding lo interface)
-    let totalRx = 0;
-    let totalTx = 0;
+    let totalRx = 0n;
+    let totalTx = 0n;
+    const interfaces: string[] = [];
 
     netData.split('\n').forEach(line => {
       if (line.includes(':')) {
-        const parts = line.trim().split(/\s+/);
-        const iface = parts[0].replace(':', '');
-        if (iface !== 'lo') {  // Exclude loopback interface
-          totalRx += parseInt(parts[1], 10);  // Received bytes
-          totalTx += parseInt(parts[9], 10);  // Transmitted bytes
+        const [iface, data] = line.split(':');
+        const ifaceName = iface.trim();
+        
+        // Exclude loopback interface and invalid interfaces
+        if (!ifaceName.startsWith('lo') && data) {
+          try {
+            const values = data.trim().split(/\s+/).map(val => BigInt(val));
+            if (values.length >= 9) {  // Ensure sufficient values exist
+              totalRx += values[0];  // Received bytes
+              totalTx += values[8];  // Transmitted bytes
+              interfaces.push(ifaceName);
+            } else {
+              log.warn('Invalid network interface data format:', { interface: ifaceName });
+            }
+          } catch (err) {
+            log.warn('Error parsing network interface data:', { 
+              interface: ifaceName, 
+              error: err instanceof Error ? err.message : String(err) 
+            });
+          }
         }
       }
     });
 
-    // Convert to appropriate units, using 1024 instead of 1000 as the conversion base
-    const formatBytes = (bytes: number): string => {
-      if (isNaN(bytes) || bytes === 0) return '0 B';
-      const k = 1024;
-      const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      // For values greater than 1024, keep two decimal places
-      if (i > 0) {
-        return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+    // Ensure at least one valid interface exists
+    if (interfaces.length === 0) {
+      log.warn('No valid network interfaces found');
+      return { rx: '0 B', tx: '0 B' };
+    }
+
+    const formatBytes = (bytes: bigint): string => {
+      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+      let size = Number(bytes);
+      let unitIndex = 0;
+      
+      while (size >= 1024 && unitIndex < units.length - 1) {
+        size /= 1024;
+        unitIndex++;
       }
-      // For values less than 1024, do not use decimal
-      return `${Math.round(bytes)} ${sizes[0]}`;
+
+      const decimals = size >= 1 ? 2 : 3;
+      return `${size.toFixed(decimals)} ${units[unitIndex]}`;
     };
 
-    const rx = formatBytes(totalRx);
-    const tx = formatBytes(totalTx);
+    const result = {
+      rx: formatBytes(totalRx),
+      tx: formatBytes(totalTx)
+    };
 
-    console.log('Network traffic:', { rx, tx, totalRx, totalTx });
-    return { rx, tx };
+    // Log detailed network traffic information
+    log.debug('Network traffic calculation:', {
+      interfaces: interfaces.join(', '),
+      rx: result.rx,
+      tx: result.tx,
+      rxRaw: totalRx.toString(),
+      txRaw: totalTx.toString()
+    });
+
+    return result;
   } catch (error) {
-    console.error('Error getting network traffic:', error);
-    return { rx: 'unknown', tx: 'unknown' };
+    log.error('Error getting network traffic:', error);
+    return { rx: '0 B', tx: '0 B' };
   }
 }
 
 // Get total disk size
 async function getDiskTotal(): Promise<number> {
   try {
-    const { stdout } = await execAsync('df -k | grep -vE "^(tmpfs|devtmpfs|udev|none|overlay|shm)" | tail -n +2');
+    // 使用与 getDiskUsage 相同的命令和过滤条件
+    const { stdout } = await execAsync(
+      'df -Pl | grep -vE "^(tmpfs|devtmpfs|udev|none|overlay|shm|snap|squashfs|rootfs|/dev/loop)"'
+    );
+    
     const lines = stdout.trim().split('\n');
-    
+    if (lines.length <= 1) {
+      log.warn('No valid disk partitions found');
+      return 0;
+    }
+
     let totalSize = 0;
+    const filesystems: string[] = [];
     
-    lines.forEach(line => {
+    // 跳过标题行
+    lines.slice(1).forEach(line => {
       const parts = line.trim().split(/\s+/);
-      const size = parseInt(parts[1]); // Total size (KB)
+      if (parts.length < 6) {
+        log.warn('Invalid df output format:', { line });
+        return;
+      }
+
+      const filesystem = parts[0];
+      const size = parseInt(parts[1]); // 总大小(1K-blocks)
       
-      if (!isNaN(size)) {
+      if (!isNaN(size) && size > 0) {
         totalSize += size;
+        filesystems.push(filesystem);
+      } else {
+        log.warn('Invalid disk size:', { filesystem, size });
       }
     });
     
-    return totalSize * 1024; // Convert to bytes
+    // 转换为字节(1K-blocks * 1024)
+    const totalBytes = totalSize * 1024;
+    
+    // 记录详细信息
+    log.debug('Disk total calculation:', {
+      totalSize: `${totalSize} KB`,
+      totalBytes: `${totalBytes} bytes`,
+      filesystems: filesystems.join(', ')
+    });
+    
+    return totalBytes;
+
   } catch (error) {
     log.error('Error getting disk total:', error);
     return 0;
@@ -419,25 +595,33 @@ async function getSystemInfo(): Promise<SystemInfo> {
   }
 }
 
-// Modify ping functionality
+// Ping function with timeout control
 async function ping(target: string, port: number): Promise<number> {
-  try {
-    // Use tcping command with strict timeout
-    const { stdout, stderr } = await execAsync(`tcping -x 1 -w 1 ${target} ${port}`);
-    
-    // Match response time from tcping output
-    const match = stdout.match(/\[open\]\s+(\d+\.\d+)\s*ms/);
-    if (match) {
-      const latency = parseFloat(match[1]);
-      return Math.round(latency * 100) / 100;
-    }
-    
-    // Any other case is considered as packet loss
-    return -1;
-  } catch (error) {
-    // Any error is considered as packet loss
-    return -1;
-  }
+  return new Promise((resolve) => {
+    // Set 1 second timeout
+    const timeout = setTimeout(() => {
+      resolve(-1);  // Timeout returns -1 indicating packet loss
+      log.debug('Ping timeout:', { target, port });
+    }, 1000);
+
+    // Execute tcping
+    execAsync(`tcping -x 1 -w 1 ${target} ${port}`)
+      .then(({ stdout }) => {
+        clearTimeout(timeout);
+        // Only process result if completed before timeout
+        const match = stdout.match(/\[open\]\s+(\d+\.\d+)\s*ms/);
+        if (match) {
+          const latency = parseFloat(match[1]);
+          resolve(Math.round(latency * 100) / 100);
+        } else {
+          resolve(-1);
+        }
+      })
+      .catch(() => {
+        clearTimeout(timeout);
+        resolve(-1);
+      });
+  });
 }
 
 // Store last successful connection status
@@ -501,14 +685,14 @@ interface PingSchedule {
 // Store current ping schedules
 let pingSchedules: PingSchedule[] = [];
 
-// Function to execute ping and handle timing
+// Optimized ping execution function
 async function executePingWithTiming(schedule: PingSchedule): Promise<void> {
   const now = Date.now();
   const expectedTime = schedule.nextPingTime;
-  
-  // Calculate packet loss before executing ping
-  if (now - expectedTime > Math.min(schedule.interval * 0.1, 500)) { // Reduce tolerance to 10% or 500ms
-    // If we're too late for this ping, mark it as lost
+  const maxDelay = Math.min(schedule.interval * 0.1, 500); // Maximum allowed delay is 500ms
+
+  // If too late for scheduled time, record as packet loss
+  if (now - expectedTime > maxDelay) {
     socket.emit('pingResult', {
       latency: -1,
       target: schedule.target,
@@ -524,57 +708,47 @@ async function executePingWithTiming(schedule: PingSchedule): Promise<void> {
     return;
   }
 
-  try {
-    const startTime = Date.now();
-    const latency = await ping(schedule.target, schedule.port);
-    const endTime = Date.now();
-    const executionTime = endTime - startTime;
-    
-    // If ping took too long, consider it as packet loss
-    if (executionTime > Math.min(schedule.interval * 0.8, schedule.interval - 100)) {
-      socket.emit('pingResult', {
-        latency: -1,
-        target: schedule.target,
-        port: schedule.port,
-        timestamp: expectedTime
-      });
-      log.debug('Ping took too long', {
-        target: schedule.target,
-        executionTime,
-        interval: schedule.interval,
-        expectedTime: new Date(expectedTime).toISOString()
-      });
-    } else {
-      socket.emit('pingResult', {
-        latency: latency,
-        target: schedule.target,
-        port: schedule.port,
-        timestamp: expectedTime
-      });
-      log.debug('Ping result sent', {
-        target: schedule.target,
-        latency,
-        expectedTime: new Date(expectedTime).toISOString(),
-        actualTime: new Date(now).toISOString(),
-        executionTime
-      });
-    }
-  } catch (error) {
+  // Execute ping with timeout
+  const startTime = Date.now();
+  const latency = await ping(schedule.target, schedule.port);
+  const endTime = Date.now();
+  const executionTime = endTime - startTime;
+
+  // If execution time exceeds 80% of interval or close to next interval, record as packet loss
+  if (executionTime > Math.min(schedule.interval * 0.8, schedule.interval - 100)) {
     socket.emit('pingResult', {
       latency: -1,
       target: schedule.target,
       port: schedule.port,
       timestamp: expectedTime
     });
-    log.error('Ping execution error', {
+    log.debug('Ping execution too long', {
       target: schedule.target,
-      error: error instanceof Error ? error.message : String(error),
+      executionTime,
+      interval: schedule.interval,
       expectedTime: new Date(expectedTime).toISOString()
     });
+    return;
   }
+
+  // Send normal ping result
+  socket.emit('pingResult', {
+    latency,
+    target: schedule.target,
+    port: schedule.port,
+    timestamp: expectedTime
+  });
+
+  log.debug('Ping result', {
+    target: schedule.target,
+    latency,
+    executionTime,
+    expectedTime: new Date(expectedTime).toISOString(),
+    actualTime: new Date(now).toISOString()
+  });
 }
 
-// Function to schedule next ping with improved drift compensation
+// Optimized scheduling function
 function scheduleNextPing(schedule: PingSchedule) {
   if (schedule.timer) {
     clearTimeout(schedule.timer);
@@ -584,17 +758,13 @@ function scheduleNextPing(schedule: PingSchedule) {
   const baseTime = schedule.startTime;
   const elapsedTime = now - baseTime;
   const intervalCount = Math.floor(elapsedTime / schedule.interval);
-  
-  // Calculate the exact next interval based on the start time
   const nextIntervalCount = intervalCount + 1;
   const exactNextTime = baseTime + (nextIntervalCount * schedule.interval);
   
   schedule.nextPingTime = exactNextTime;
-  
-  // Calculate precise delay
   const delay = Math.max(0, schedule.nextPingTime - now);
-  
-  // For very small delays, use a more precise timing mechanism
+
+  // Use more precise timing for very small delays
   if (delay < 15) {
     const start = process.hrtime();
     const checkTime = () => {
@@ -612,7 +782,6 @@ function scheduleNextPing(schedule: PingSchedule) {
       const beforeExecution = Date.now();
       const timeoutDrift = beforeExecution - schedule.nextPingTime;
       
-      // Log if there's significant drift
       if (Math.abs(timeoutDrift) > 5) {
         log.debug('Timer drift detected', {
           target: schedule.target,
@@ -626,14 +795,12 @@ function scheduleNextPing(schedule: PingSchedule) {
       scheduleNextPing(schedule);
     }, delay);
   }
-  
-  log.debug('Scheduled next ping', {
+
+  log.debug('Next ping scheduled', {
     target: schedule.target,
     nextPingTime: new Date(schedule.nextPingTime).toISOString(),
     delay,
-    interval: schedule.interval,
-    baseTime: new Date(baseTime).toISOString(),
-    intervalCount: nextIntervalCount
+    interval: schedule.interval
   });
 }
 
