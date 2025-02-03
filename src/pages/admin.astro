@@ -4,5 +4,36 @@ import AdminDashboard from '../components/AdminDashboard';
 ---
 
 <Layout title="A-Server Management">
-  <AdminDashboard client:load />
-</Layout> 
+  <div class="min-h-screen bg-gradient-to-b from-[#1C1C1C] to-[#1a1a1a] relative overflow-hidden">
+    <!-- Background decoration -->
+    <div class="absolute inset-0 bg-[#1C1C1C]">
+      <div class="absolute inset-0 opacity-5">
+        <div class="absolute top-0 -left-4 w-96 h-96 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl animate-pulse-slow"></div>
+        <div class="absolute top-0 -right-4 w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl animate-pulse-slow" style="animation-delay: 1.5s;"></div>
+        <div class="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-96 h-96 bg-cyan-500 rounded-full mix-blend-multiply filter blur-3xl animate-pulse-slow" style="animation-delay: 3s;"></div>
+      </div>
+    </div>
+
+    <!-- Main content -->
+    <div class="relative z-10">
+      <AdminDashboard client:load />
+    </div>
+  </div>
+</Layout>
+
+<style>
+  .animate-pulse-slow {
+    animation: pulse 8s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 0.05;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.1;
+      transform: scale(1.1);
+    }
+  }
+</style> 

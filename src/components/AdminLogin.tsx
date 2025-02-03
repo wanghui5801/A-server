@@ -125,7 +125,7 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#1C1C1C] px-2 sm:px-0">
+    <div className="min-h-screen flex items-center justify-center bg-[#1C1C1C] p-4 sm:p-0">
       <div className="w-full max-w-md p-6 sm:p-8 bg-[#252525] rounded-xl shadow-2xl animate-fade-in backdrop-blur-sm bg-opacity-95 transition-all duration-300 border border-gray-800/30">
         <div className="flex items-center justify-center mb-6 sm:mb-8 animate-slide-down">
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-100">

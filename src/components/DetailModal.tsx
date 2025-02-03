@@ -288,10 +288,10 @@ const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, p
 
   // 添加获取丢包率颜色的函数
   const getLossRateColor = useCallback((lossRate: number) => {
-    if (lossRate >= 50) return 'bg-red-500';
-    if (lossRate >= 20) return 'bg-orange-500';
-    if (lossRate >= 5) return 'bg-yellow-500';
-    return 'bg-green-500';
+    if (lossRate >= 50) return 'bg-red-500/90 shadow-sm shadow-red-500/20 hover:shadow-red-500/30 hover:bg-red-500/80 text-white';
+    if (lossRate >= 20) return 'bg-orange-500/90 shadow-sm shadow-orange-500/20 hover:shadow-orange-500/30 hover:bg-orange-500/80 text-white';
+    if (lossRate >= 5) return 'bg-yellow-500/90 shadow-sm shadow-yellow-500/20 hover:shadow-yellow-500/30 hover:bg-yellow-500/80 text-white';
+    return 'bg-green-500/90 shadow-sm shadow-green-500/20 hover:shadow-green-500/30 hover:bg-green-500/80 text-white';
   }, []);
 
   // Optimized data fetching function
@@ -399,7 +399,7 @@ const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, p
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
-      <div className="bg-[#1C1C1C] rounded-xl p-4 sm:p-6 w-[calc(100%-2rem)] sm:w-full max-w-4xl h-[calc(100vh-4rem)] sm:h-auto overflow-hidden modal-enter border border-gray-800/20 mx-auto shadow-2xl">
+      <div className="bg-[#1C1C1C] rounded-xl p-4 sm:p-6 w-[calc(100%-2rem)] sm:w-full max-w-4xl h-[calc(100vh-4rem)] sm:h-auto overflow-hidden modal-enter border border-gray-800/20 mx-auto shadow-2xl hover:shadow-3xl transition-shadow duration-300">
         <div className="flex justify-between items-center mb-5 sm:mb-6">
           <div className="flex items-center gap-2.5 sm:gap-3 animate-slide-down">
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-100 hover:text-white transition-colors duration-300 truncate group-hover:text-white">{client.hostname}</h2>
@@ -519,7 +519,7 @@ const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, p
             </div>
           </div>
 
-          <div className="h-60 sm:h-[340px] relative bg-[#252525] rounded-lg p-4 sm:p-5 transition-all duration-300 hover:bg-[#2a2a2a] animate-fade-in border border-gray-800/10 backdrop-blur-sm hover:shadow-lg group" style={{ animationDelay: '400ms' }}>
+          <div className="h-60 sm:h-[340px] relative bg-[#252525] rounded-lg p-4 sm:p-5 transition-all duration-300 hover:bg-[#2a2a2a] animate-fade-in border border-gray-800/10 backdrop-blur-sm hover:shadow-lg hover:shadow-black/5 group" style={{ animationDelay: '400ms' }}>
             {chartData && localClient.ping_history && localClient.ping_history.length > 0 ? (
               <Line options={chartOptions} data={chartData} />
             ) : (

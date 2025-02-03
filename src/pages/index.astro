@@ -4,7 +4,48 @@ import Dashboard from '../components/Dashboard';
 ---
 
 <Layout title="A-Server">
-	<div class="container mx-auto px-4 py-8">
-		<Dashboard client:visible />
+	<div class="min-h-screen bg-gradient-to-b from-[#1C1C1C] to-[#1a1a1a] relative overflow-hidden">
+		<!-- Background decoration -->
+		<div class="absolute inset-0 bg-[#1C1C1C]">
+			<div class="absolute inset-0 opacity-5">
+				<div class="absolute top-0 -left-4 w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl animate-pulse-slow"></div>
+				<div class="absolute top-0 -right-4 w-96 h-96 bg-violet-500 rounded-full mix-blend-multiply filter blur-3xl animate-pulse-slow" style="animation-delay: 1.5s;"></div>
+				<div class="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-96 h-96 bg-emerald-500 rounded-full mix-blend-multiply filter blur-3xl animate-pulse-slow" style="animation-delay: 3s;"></div>
+			</div>
+		</div>
+
+		<!-- Main content -->
+		<div class="relative z-10">
+			<Dashboard client:visible />
+		</div>
 	</div>
 </Layout>
+
+<style>
+	@keyframes gradient-shift {
+		0% {
+			background-position: 0% 50%;
+		}
+		50% {
+			background-position: 100% 50%;
+		}
+		100% {
+			background-position: 0% 50%;
+		}
+	}
+
+	.animate-pulse-slow {
+		animation: pulse 8s ease-in-out infinite;
+	}
+
+	@keyframes pulse {
+		0%, 100% {
+			opacity: 0.05;
+			transform: scale(1);
+		}
+		50% {
+			opacity: 0.1;
+			transform: scale(1.1);
+		}
+	}
+</style>

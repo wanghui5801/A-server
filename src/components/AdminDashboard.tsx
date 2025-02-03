@@ -196,7 +196,7 @@ const ChangePasswordModal = React.memo(({ isOpen, onClose }: {
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-blue-500/90 text-white rounded-lg hover:bg-blue-500/80 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg shadow-blue-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm border border-blue-400/20"
+                className="px-4 py-2 bg-blue-500/90 text-white rounded-lg hover:bg-blue-500/80 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg shadow-blue-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm border border-blue-400/20 hover:border-blue-400/30"
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -701,6 +701,9 @@ const AdminDashboard: React.FC = () => {
   const [connected, setConnected] = useState(false);
   const [copySuccess, setCopySuccess] = useState<string>('');
   const [serverPublicIP, setServerPublicIP] = useState<string>('');
+  // Add new state for sort order input
+  const [sortInputs, setSortInputs] = useState<{[key: string]: number}>({});
+  const [updateSortTimeout, setUpdateSortTimeout] = useState<{[key: string]: NodeJS.Timeout}>({});
 
   const fetchClients = useCallback(async () => {
     try {
@@ -1020,11 +1023,11 @@ const AdminDashboard: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'online':
-        return 'bg-green-500';
+        return 'bg-green-500/90 shadow-sm shadow-green-500/20 hover:shadow-green-500/30 hover:bg-green-500/80';
       case 'down':
-        return 'bg-red-500';
+        return 'bg-red-500/90 shadow-sm shadow-red-500/20 hover:shadow-red-500/30 hover:bg-red-500/80';
       default:
-        return 'bg-yellow-500';
+        return 'bg-yellow-500/90 shadow-sm shadow-yellow-500/20 hover:shadow-yellow-500/30 hover:bg-yellow-500/80';
     }
   };
 
@@ -1137,6 +1140,46 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  // Add new function to handle sort input changes
+  const handleSortInputChange = (hostname: string, value: string) => {
+    const numValue = parseInt(value) || 0;
+    
+    // Update the input state immediately for responsive UI
+    setSortInputs(prev => ({
+      ...prev,
+      [hostname]: numValue
+    }));
+
+    // Clear any existing timeout for this hostname
+    if (updateSortTimeout[hostname]) {
+      clearTimeout(updateSortTimeout[hostname]);
+    }
+
+    // Set new timeout
+    const newTimeout = setTimeout(() => {
+      updateSortOrder(hostname, numValue);
+      // Clear the timeout reference
+      setUpdateSortTimeout(prev => {
+        const newTimeouts = { ...prev };
+        delete newTimeouts[hostname];
+        return newTimeouts;
+      });
+    }, 1000); // Wait for 1 second of no changes before updating
+
+    // Save the new timeout
+    setUpdateSortTimeout(prev => ({
+      ...prev,
+      [hostname]: newTimeout
+    }));
+  };
+
+  // Clean up timeouts on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(updateSortTimeout).forEach(timeout => clearTimeout(timeout));
+    };
+  }, [updateSortTimeout]);
+
   if (!isAuthenticated) {
     return <AdminLogin onLoginSuccess={() => setIsAuthenticated(true)} />;
   }
@@ -1158,8 +1201,8 @@ const AdminDashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#1C1C1C] text-white p-4 sm:p-8">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-12 animate-fade-in">
+    <div className="min-h-screen bg-[#1C1C1C] text-white p-2 sm:p-8">
+      <div className="max-w-7xl mx-auto px-2 sm:px-6 py-6 sm:py-12 animate-fade-in">
         <div className="mb-6 sm:mb-8">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-6">
@@ -1221,7 +1264,7 @@ const AdminDashboard: React.FC = () => {
           {clients.map((client, index) => (
             <div
               key={client.hostname}
-              className="bg-[#1E1E1E] rounded-xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between transition-all duration-300 transform hover:scale-[1.01] hover:shadow-xl animate-fade-in hover:bg-[#252525] gap-3 sm:gap-0 border border-gray-800/10 backdrop-blur-sm"
+              className="bg-[#1E1E1E] rounded-xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between transition-all duration-300 transform hover:scale-[1.01] hover:shadow-xl hover:shadow-black/5 animate-fade-in hover:bg-[#252525] gap-3 sm:gap-0 border border-gray-800/10 backdrop-blur-sm group"
               style={{ animationDelay: `${index * 100}ms` }}
             >
               {/* Mobile Layout */}
@@ -1243,10 +1286,10 @@ const AdminDashboard: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <input
                         type="number"
-                        value={client.sort_order}
+                        value={sortInputs[client.hostname] ?? client.sort_order}
                         onChange={(e) => {
                           e.stopPropagation();
-                          updateSortOrder(client.hostname, parseInt(e.target.value) || 0);
+                          handleSortInputChange(client.hostname, e.target.value);
                         }}
                         className="w-14 px-2 py-1 bg-[#252525] rounded text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-green-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none font-medium border border-gray-800/10"
                         min="0"
@@ -1375,10 +1418,10 @@ const AdminDashboard: React.FC = () => {
                     </button>
                     <input
                       type="number"
-                      value={client.sort_order}
+                      value={sortInputs[client.hostname] ?? client.sort_order}
                       onChange={(e) => {
                         e.stopPropagation();
-                        updateSortOrder(client.hostname, parseInt(e.target.value) || 0);
+                        handleSortInputChange(client.hostname, e.target.value);
                       }}
                       className="w-16 px-2.5 py-1.5 bg-[#252525] rounded-lg text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       min="0"
