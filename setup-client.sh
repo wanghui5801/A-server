@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+    echo "Please run this script as root (use sudo ./setup-client.sh)"
+    exit 1
+fi
+
 # Interactive parameter input
 if [ "$#" -ne 2 ]; then
     echo "No arguments provided. Starting interactive mode..."
@@ -25,21 +31,21 @@ install_node() {
             case "$ID" in
                 "ubuntu"|"debian")
                     # Ubuntu/Debian systems
-                    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-                    sudo apt-get install -y nodejs make gcc g++ python3 python3-pip unzip
+                    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+                    apt-get install -y nodejs make gcc g++ python3 python3-pip unzip
                     ;;
                 "centos"|"rhel"|"fedora")
                     # CentOS/RHEL/Fedora systems
-                    curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-                    sudo yum install -y nodejs make gcc gcc-c++ python3 python3-pip unzip
+                    curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+                    yum install -y nodejs make gcc gcc-c++ python3 python3-pip unzip
                     ;;
                 "opensuse"|"sles")
                     # OpenSUSE systems
-                    sudo zypper install -y nodejs20 make gcc gcc-c++ python3 python3-pip unzip
+                    zypper install -y nodejs20 make gcc gcc-c++ python3 python3-pip unzip
                     ;;
                 "arch"|"manjaro")
                     # Arch Linux/Manjaro systems
-                    sudo pacman -Sy --noconfirm nodejs npm make gcc python3 python-pip unzip
+                    pacman -Sy --noconfirm nodejs npm make gcc python3 python-pip unzip
                     ;;
                 *)
                     echo "Unsupported Linux distribution: $ID"
@@ -70,22 +76,22 @@ install_tcping() {
             . /etc/os-release
             case "$ID" in
                 "ubuntu"|"debian")
-                    sudo apt-get install -y tcptraceroute bc
+                    apt-get install -y tcptraceroute bc
                     ;;
                 "centos"|"rhel"|"fedora")
-                    sudo yum install -y tcptraceroute bc
+                    yum install -y tcptraceroute bc
                     ;;
                 "opensuse"|"sles"|"arch"|"manjaro")
-                    sudo zypper install -y bc
+                    zypper install -y bc
                     ;;
             esac
             
             # Install tcping script
             echo "Installing tcping..."
-            sudo wget -O /usr/local/bin/tcping http://www.vdberg.org/~richard/tcpping
-            sudo chmod +x /usr/local/bin/tcping
+            wget -O /usr/local/bin/tcping http://www.vdberg.org/~richard/tcpping
+            chmod +x /usr/local/bin/tcping
             # Create symlink to /usr/bin for compatibility
-            sudo ln -sf /usr/local/bin/tcping /usr/bin/tcping
+            ln -sf /usr/local/bin/tcping /usr/bin/tcping
         fi
     fi
 }
@@ -109,15 +115,15 @@ install_tcping
 # Install PM2 globally
 echo "Installing PM2..."
 # Clean npm cache and remove existing PM2 installation
-sudo npm cache clean -f
-sudo rm -rf /usr/lib/node_modules/pm2
-sudo rm -rf /usr/local/lib/node_modules/pm2
+npm cache clean -f
+rm -rf /usr/lib/node_modules/pm2
+rm -rf /usr/local/lib/node_modules/pm2
 # Try to install PM2 with error handling
-if ! sudo npm install pm2@latest -g; then
+if ! npm install pm2@latest -g; then
     echo "First PM2 installation attempt failed, trying alternative method..."
     # Second attempt with different approach
-    if ! sudo npm install pm2@latest -g --force; then
-        echo "Error: Failed to install PM2. Please try manually with: sudo npm install pm2@latest -g --force"
+    if ! npm install pm2@latest -g --force; then
+        echo "Error: Failed to install PM2. Please try manually with: npm install pm2@latest -g --force"
         exit 1
     fi
 fi

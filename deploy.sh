@@ -3,6 +3,12 @@
 # Exit on error
 set -e
 
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+    echo "Please run this script as root (use sudo ./deploy.sh)"
+    exit 1
+fi
+
 # Add color output
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -34,11 +40,11 @@ check_requirements() {
 install_nginx() {
     echo -e "${YELLOW}Installing Nginx...${NC}"
     if [ -f /etc/debian_version ]; then
-        sudo apt-get update
-        sudo apt-get install -y nginx
+        apt-get update
+        apt-get install -y nginx
     elif [ -f /etc/redhat-release ]; then
-        sudo yum install -y epel-release
-        sudo yum install -y nginx
+        yum install -y epel-release
+        yum install -y nginx
     fi
     
     echo -e "${GREEN}Nginx installation completed${NC}"
@@ -48,12 +54,12 @@ install_nginx() {
 install_nodejs() {
     echo "Installing Node.js 20.x..."
     if [ -f /etc/debian_version ]; then
-        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-        sudo apt-get update
-        sudo apt-get install -y nodejs
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+        apt-get update
+        apt-get install -y nodejs
     elif [ -f /etc/redhat-release ]; then
-        curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo -E bash -
-        sudo yum install -y nodejs
+        curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+        yum install -y nodejs
     fi
 }
 
@@ -62,14 +68,14 @@ install_dependencies() {
     echo -e "${YELLOW}Installing system dependencies...${NC}"
     
     if [ -f /etc/debian_version ]; then
-        sudo apt-get install -y python3 make g++ sqlite3 python3-pip build-essential
+        apt-get install -y python3 make g++ sqlite3 python3-pip build-essential
     elif [ -f /etc/redhat-release ]; then
-        sudo yum install -y python3 make gcc-c++ sqlite-devel python3-pip
-        sudo yum groupinstall -y "Development Tools"
+        yum install -y python3 make gcc-c++ sqlite-devel python3-pip
+        yum groupinstall -y "Development Tools"
     fi
 
     # Install global dependencies
-    sudo npm install -g typescript tsx pm2
+    npm install -g typescript tsx pm2
 }
 
 # Clone project
@@ -162,7 +168,7 @@ build_project() {
     NODE_ENV=production npm run build
     
     # Ensure correct build directory permissions
-    sudo chown -R $USER:$USER dist
+    chown -R $USER:$USER dist
     
     # Stop existing PM2 processes (if any)
     pm2 stop a-server-frontend 2>/dev/null || true
@@ -184,7 +190,7 @@ setup_nginx() {
     echo "Configuring Nginx..."
     
     # Create configuration file
-    sudo tee /etc/nginx/sites-available/astro-monitor <<EOF
+    tee /etc/nginx/sites-available/astro-monitor <<EOF
 server {
     listen 8080;
     server_name ${SERVER_IP};
@@ -279,24 +285,24 @@ server {
 EOF
 
     # Remove default config (if exists)
-    sudo rm -f /etc/nginx/sites-enabled/default
+    rm -f /etc/nginx/sites-enabled/default
     
     # Remove old config (if exists)
-    sudo rm -f /etc/nginx/sites-enabled/astro-monitor
-    sudo rm -f /etc/nginx/conf.d/astro-monitor.conf
+    rm -f /etc/nginx/sites-enabled/astro-monitor
+    rm -f /etc/nginx/conf.d/astro-monitor.conf
     
     # Create symlink to sites-enabled
-    sudo ln -s /etc/nginx/sites-available/astro-monitor /etc/nginx/sites-enabled/
+    ln -s /etc/nginx/sites-available/astro-monitor /etc/nginx/sites-enabled/
 
     # Ensure nginx user has correct permissions
-    sudo chown -R www-data:www-data /etc/nginx/sites-available/astro-monitor
-    sudo chmod 644 /etc/nginx/sites-available/astro-monitor
+    chown -R www-data:www-data /etc/nginx/sites-available/astro-monitor
+    chmod 644 /etc/nginx/sites-available/astro-monitor
 
     # Test Nginx configuration
-    sudo nginx -t
+    nginx -t
 
     # Restart Nginx
-    sudo systemctl restart nginx
+    systemctl restart nginx
 }
 
 # Check service status
@@ -365,9 +371,9 @@ main() {
     echo "Frontend output log: tail -f logs/frontend-output.log"
     echo "Backend error log: tail -f logs/backend-error.log"
     echo "Backend output log: tail -f logs/backend-output.log"
-    echo "Nginx status: sudo systemctl status nginx"
-    echo "Nginx error log: sudo tail -f /var/log/nginx/error.log"
-    echo "Nginx access log: sudo tail -f /var/log/nginx/access.log"
+    echo "Nginx status: systemctl status nginx"
+    echo "Nginx error log: tail -f /var/log/nginx/error.log"
+    echo "Nginx access log: tail -f /var/log/nginx/access.log"
     echo ""
     echo -e "${YELLOW}Stop services:${NC}"
     echo "Run 'pm2 stop all' to stop all services"
