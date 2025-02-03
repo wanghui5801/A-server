@@ -14,7 +14,19 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Check if port 8080 is available
+check_port() {
+    if netstat -tuln | grep -q ":8080 "; then
+        echo -e "${YELLOW}Error: Port 8080 is already in use${NC}"
+        echo "Please free up port 8080 before running this script"
+        exit 1
+    fi
+}
+
 echo -e "${GREEN}Starting production deployment...${NC}"
+
+# Run port check before proceeding
+check_port
 
 # Check basic system requirements
 check_requirements() {

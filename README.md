@@ -27,12 +27,33 @@
 
 [![Deploy with Docker](https://img.shields.io/badge/Deploy%20with-Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/r/xhh1128/a-server)
 
+#### Using Docker Run
+
 ```bash
 docker pull xhh1128/a-server:latest
 docker run -d -p 8080:8080 --name a-server-container xhh1128/a-server:latest
 ```
 
-Access the monitoring dashboard at `http://localhost:8080`
+#### Using Docker Compose (Alternative)
+
+1. Create a directory and download the compose file:
+```bash
+mkdir a-server && cd a-server
+curl -O https://raw.githubusercontent.com/wanghui5801/A-server/main/docker-compose.yml
+```
+
+2. Start the service:
+```bash
+# Start the service
+docker compose up -d
+
+# Stop the service
+docker compose down
+```
+
+The monitoring dashboard will be available at `http://localhost:8080`
+
+> Note: The application uses SQLite as its database, which is included in the Docker image.
 
 ### 2. Server Installation
 
@@ -134,6 +155,11 @@ docker run -d -p 8080:8080 --name a-server-container xhh1128/a-server:latest
 # Or build your own image
 docker build -t a-server .
 docker run -d -p 8080:8080 --name a-server-container a-server
+
+# Using Docker Compose (Recommended for production)
+docker compose up -d    # Start services
+docker compose down     # Stop services
+docker compose logs -f  # View logs
 ```
 
 ### Manual Deployment

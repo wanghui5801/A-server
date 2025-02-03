@@ -1,0 +1,8 @@
+version: '3.8'
+
+services:
+  app:
+    image: xhh1128/a-server:latest
+    container_name: a-server-container
+    ports:
+      - "8080:8080" 
