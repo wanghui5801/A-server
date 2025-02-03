@@ -974,7 +974,7 @@ socket.on('connect', async () => {
     log.debug('Sent registration info', { hostname: systemInfo.hostname });
     
     // Set up system info update timer
-    const systemInfoTimer = setInterval(updateSystemInfo, 5000);
+    const systemInfoTimer = setInterval(updateSystemInfo, 3000);
     (systemInfoTimer as PingTimer).isUpdateTimer = true;
     timers.add(systemInfoTimer);
     

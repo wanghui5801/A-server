@@ -749,8 +749,9 @@ io.on('connection', (socket) => {
         ['online', hostname]
       );
 
-      // Remove the ping targets update from here as it's not needed
-      // The client already has the targets and their timers are running
+      // Broadcast to all connected dashboard clients that system info has been updated
+      io.emit('systemInfoUpdate');
+
     } catch (err) {
       logger.error('Error updating system info:', err);
     }

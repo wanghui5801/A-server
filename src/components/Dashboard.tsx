@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import socketIOClient from 'socket.io-client';
 import DetailModal from './DetailModal';
 import '../styles/animations.css';
+import io from 'socket.io-client';
 
 interface Client {
   id: string;
@@ -398,71 +399,28 @@ const Dashboard: React.FC = () => {
     [clients, processClientData, sortClients]
   );
 
-  // Initialize socket event listeners when component mounts
-  useEffect(() => {
-    if (typeof window === 'undefined' || !socket) return;
-
-    const handleSocketEvents = () => {
-    const handleConnect = () => {
-        console.log('Socket connected successfully');
-      setConnected(true);
-      setError('');
-        debouncedFetchClients();
-        fetchPingConfigs(); // Get ping configs after successful connection
-    };
-
-    const handleDisconnect = (reason: string) => {
-        console.log('Socket disconnected:', reason);
-      if (reason === 'io server disconnect') {
-        socket.connect();
-      }
-        setConnected(false);
-        setError('Disconnected from server, attempting to reconnect...');
-    };
-
-    const handleConnectError = (err: Error) => {
-        console.error('Socket connection error:', err);
-        setError('Failed to connect to server, attempting to reconnect...');
-      setConnected(false);
-    };
-
-    const handleError = (err: Error) => {
-        console.error('Socket error:', err);
-        setError('Connection error, attempting to reconnect...');
-    };
-
-    socket.on('connect', handleConnect);
-    socket.on('disconnect', handleDisconnect);
-    socket.on('connect_error', handleConnectError);
-    socket.on('error', handleError);
-
-    return () => {
-      socket.off('connect', handleConnect);
-      socket.off('disconnect', handleDisconnect);
-      socket.off('connect_error', handleConnectError);
-      socket.off('error', handleError);
-
-    };
-    };
-
-    return handleSocketEvents();
-  }, [debouncedFetchClients, fetchPingConfigs]);
-
   // Add periodic updates as backup
   useEffect(() => {
     // Get initial data immediately
     debouncedFetchClients();
     fetchPingConfigs();
 
-    // Set update interval (update client data every 3 seconds)
-    const clientsInterval = setInterval(debouncedFetchClients, 3000);
-    
     // Set longer interval for config updates (every 30 seconds)
     const configInterval = setInterval(fetchPingConfigs, 30000);
 
+    // Set up WebSocket connection for real-time updates
+    const socket = io(getApiUrl(), {
+      transports: ['websocket'],
+      path: '/socket.io'
+    });
+
+    socket.on('systemInfoUpdate', () => {
+      debouncedFetchClients();
+    });
+
     return () => {
-      clearInterval(clientsInterval);
       clearInterval(configInterval);
+      socket.disconnect();
     };
   }, [debouncedFetchClients, fetchPingConfigs]);
 
