@@ -700,19 +700,6 @@ async function ping(target: string, port: number): Promise<number> {
   });
 }
 
-// Store last successful connection status
-let lastSystemInfo: SystemInfo | null = null;
-
-// Add custom type
-interface PingTimer extends NodeJS.Timeout {
-  isUpdateTimer?: boolean;
-  target?: string;
-  port?: number;
-}
-
-// Modify timers type
-const timers = new Set<PingTimer>();
-
 // Helper function to clear timers
 function clearPingTimers() {
   // Clear all ping timers
@@ -732,53 +719,14 @@ interface PingSchedule {
   interval: number;
   nextPingTime: number;
   startTime: number;
-  timer?: NodeJS.Timeout;  // Add timer to track the schedule
+  timer?: NodeJS.Timeout;
 }
 
-// Store last successful system info and update time
-interface SystemInfoState {
-  info: SystemInfo | null;
-  lastUpdateTime: number;
-}
-
-let systemInfoState: SystemInfoState = {
-  info: null,
-  lastUpdateTime: 0
-};
-
-// Separate system info update function with rate limiting
-async function updateSystemInfo() {
-  try {
-    const now = Date.now();
-    // Ensure minimum 2.9s between updates (providing 100ms buffer)
-    if (now - systemInfoState.lastUpdateTime < 2900) {
-      log.debug('Skipping system info update - too soon', {
-        timeSinceLastUpdate: now - systemInfoState.lastUpdateTime
-      });
-      return;
-    }
-
-    const systemInfo = await getSystemInfo();
-    systemInfoState = {
-      info: systemInfo,
-      lastUpdateTime: now
-    };
-    
-    socket.emit('systemInfo', systemInfo);
-    log.debug('Sent system info', { 
-      hostname: systemInfo.hostname,
-      timestamp: new Date(now).toISOString()
-    });
-  } catch (error) {
-    log.error('Error updating system info:', error);
-  }
-}
-
-// Modify connection event processing
+// Modify connection event processing to be simpler
 socket.on('connect', async () => {
   log.info('Connected to server');
   try {
-    // Send initial system info
+    // Send initial system info only once at connection
     const systemInfo = await getSystemInfo();
     socket.emit('register', systemInfo);
     log.debug('Sent registration info', { hostname: systemInfo.hostname });
@@ -790,7 +738,7 @@ socket.on('connect', async () => {
   }
 });
 
-// Add handler for system info request
+// Only respond to server requests for system info
 socket.on('requestSystemInfo', async () => {
   try {
     const systemInfo = await getSystemInfo();
@@ -1011,58 +959,20 @@ function scheduleNextPing(schedule: PingSchedule) {
   }
 
   const now = Date.now();
-  const baseTime = schedule.startTime;
-  const elapsedTime = now - baseTime;
-  const intervalCount = Math.floor(elapsedTime / schedule.interval);
-  const nextIntervalCount = intervalCount + 1;
-  const exactNextTime = baseTime + (nextIntervalCount * schedule.interval);
-  
-  schedule.nextPingTime = exactNextTime;
-  const delay = Math.max(0, schedule.nextPingTime - now);
+  const delay = Math.max(0, schedule.interval);
 
-  // Use more precise timing for very small delays
-  if (delay < 15) {
-    const start = process.hrtime();
-    const checkTime = () => {
-      const [seconds, nanoseconds] = process.hrtime(start);
-      const elapsed = (seconds * 1000) + (nanoseconds / 1000000);
-      if (elapsed >= delay) {
-        executePingWithTiming(schedule).then(() => {
-          // Only schedule next ping if the schedule still exists
-          if (pingSchedules.includes(schedule)) {
-            scheduleNextPing(schedule);
-          }
-        });
-      } else {
-        setImmediate(checkTime);
-      }
-    };
-    setImmediate(checkTime);
-  } else {
-    schedule.timer = setTimeout(async () => {
-      const beforeExecution = Date.now();
-      const timeoutDrift = beforeExecution - schedule.nextPingTime;
-      
-      if (Math.abs(timeoutDrift) > 5) {
-        log.debug('Timer drift detected', {
-          target: schedule.target,
-          drift: timeoutDrift,
-          scheduledTime: new Date(schedule.nextPingTime).toISOString(),
-          actualTime: new Date(beforeExecution).toISOString()
-        });
-      }
-      
-      await executePingWithTiming(schedule);
-      // Only schedule next ping if the schedule still exists
-      if (pingSchedules.includes(schedule)) {
-        scheduleNextPing(schedule);
-      }
-    }, delay);
-  }
+  schedule.timer = setTimeout(async () => {
+    await executePingWithTiming(schedule);
+    // 只有当调度仍然存在时才继续
+    if (pingSchedules.includes(schedule)) {
+      schedule.nextPingTime = Date.now() + schedule.interval;
+      scheduleNextPing(schedule);
+    }
+  }, delay);
 
   log.debug('Next ping scheduled', {
     target: schedule.target,
-    nextPingTime: new Date(schedule.nextPingTime).toISOString(),
+    nextPingTime: new Date(now + delay).toISOString(),
     delay,
     interval: schedule.interval
   });
@@ -1112,31 +1022,17 @@ async function addPingTarget(target: { target: string, port: number, interval: n
   });
 }
 
-// Modify ping target update processing
+// Modify ping target update processing to be more efficient
 socket.on('updatePingTargets', async (data: { targets: Array<{target: string, port: number, interval: number}> }) => {
   try {
     log.info('Received ping targets update:', { 
       targets: data.targets.map(({ target, port, interval }) => ({ target, port, interval }))
     });
     
-    // Find targets to remove
-    const targetsToRemove = pingSchedules.filter(schedule => 
-      !data.targets.some(t => t.target === schedule.target && t.port === schedule.port)
-    );
+    // Clear all existing ping schedules first
+    clearPingTimers();
     
-    // Remove old targets
-    for (const schedule of targetsToRemove) {
-      if (schedule.timer) {
-        clearTimeout(schedule.timer);
-      }
-      pingSchedules = pingSchedules.filter(s => s !== schedule);
-      log.debug('Removed ping schedule', {
-        target: schedule.target,
-        port: schedule.port
-      });
-    }
-    
-    // Add or update targets one by one
+    // Add new ping targets
     for (const target of data.targets) {
       await addPingTarget(target);
     }

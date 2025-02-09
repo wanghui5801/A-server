@@ -256,7 +256,7 @@ const Dashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isEditNameModalOpen, setIsEditNameModalOpen] = useState(false);
   const [serviceName, setServiceName] = useState<string>('Services');
-  const [socket, setSocket] = useState<any>(null);
+  const socketRef = useRef<any>(null);
   const updateIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Replace localStorage effect with API call
@@ -383,74 +383,13 @@ const Dashboard: React.FC = () => {
     }
   }, [connected]);
 
-  // Replace socket initialization effect with optimized version
-  useEffect(() => {
-    // Initialize socket connection
-    const newSocket = socketIOClient(getSocketUrl(), {
-      transports: ['websocket', 'polling'],
-      path: '/socket.io',
-      autoConnect: true,
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      timeout: 20000
-    });
-    setSocket(newSocket);
-
-    // Clear existing interval if any
-    if (updateIntervalRef.current) {
-      clearInterval(updateIntervalRef.current);
-    }
-
-    // Set up system info update interval with debounce
-    let lastRequestTime = 0;
-    updateIntervalRef.current = setInterval(async () => {
-      const now = Date.now();
-      // Ensure at least 2.9s between requests
-      if (now - lastRequestTime < 2900) {
-        return;
-      }
-      
-      try {
-        await fetch('/api/request-system-info', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        lastRequestTime = now;
-      } catch (error) {
-        console.error('Error requesting system info update:', error);
-      }
-    }, 3000);
-
-    // Clean up on unmount
-    return () => {
-      if (updateIntervalRef.current) {
-        clearInterval(updateIntervalRef.current);
-        updateIntervalRef.current = null;
-      }
-      if (newSocket) {
-        newSocket.disconnect();
-        newSocket.close();
-      }
-    };
-  }, []);
-
-  // Optimize debouncedFetchClients to prevent duplicate requests
+  // Replace debouncedFetchClients with simpler version
   const debouncedFetchClients = useCallback(
     (() => {
       let timeoutId: NodeJS.Timeout;
-      let lastFetchTime = 0;
       return () => {
         if (timeoutId) {
           clearTimeout(timeoutId);
-        }
-        
-        const now = Date.now();
-        // Ensure at least 2.9s between fetches
-        if (now - lastFetchTime < 2900) {
-          return;
         }
 
         timeoutId = setTimeout(async () => {
@@ -474,8 +413,7 @@ const Dashboard: React.FC = () => {
             setClients(sortedClients);
             setLoading(false);
             setError('');
-            setLastUpdate(now);
-            lastFetchTime = now;
+            setLastUpdate(Date.now());
           } catch (err) {
             console.error('Error fetching clients:', err);
             setError('Failed to fetch clients');
@@ -487,28 +425,95 @@ const Dashboard: React.FC = () => {
     [clients, processClientData, sortClients]
   );
 
-  // Add periodic updates as backup
+  // Initialize socket connection
   useEffect(() => {
-    // Get initial data immediately
-    debouncedFetchClients();
-    fetchPingConfigs();
-
-    // Set longer interval for config updates (every 30 seconds)
-    const configInterval = setInterval(fetchPingConfigs, 30000);
-
-    // Set up WebSocket connection for real-time updates
-    const socket = io(getApiUrl(), {
+    const newSocket = socketIOClient(getSocketUrl(), {
       transports: ['websocket'],
-      path: '/socket.io'
+      path: '/socket.io',
+      autoConnect: true,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      timeout: 20000
+    });
+
+    socketRef.current = newSocket;
+
+    return () => {
+      newSocket.disconnect();
+    };
+  }, []);
+
+  // Set up system info request interval
+  useEffect(() => {
+    updateIntervalRef.current = setInterval(() => {
+      try {
+        fetch(`${getApiUrl()}/api/request-system-info`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+      } catch (error) {
+        console.error('Error requesting system info:', error);
+      }
+    }, 3000);
+
+    return () => {
+      if (updateIntervalRef.current) {
+        clearInterval(updateIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Set up socket event listeners
+  useEffect(() => {
+    if (!socketRef.current) return;
+
+    const socket = socketRef.current;
+
+    socket.on('connect', () => {
+      setConnected(true);
+      debouncedFetchClients();
+    });
+
+    socket.on('disconnect', () => {
+      setConnected(false);
     });
 
     socket.on('systemInfoUpdate', () => {
       debouncedFetchClients();
     });
 
+    socket.on('systemInfo', (data: any) => {
+      setClients(prevClients => {
+        const index = prevClients.findIndex(c => c.hostname === data.hostname);
+        if (index === -1) {
+          return [...prevClients, { ...data, lastSeen: new Date().toISOString() }];
+        }
+        const newClients = [...prevClients];
+        newClients[index] = { ...newClients[index], ...data, lastSeen: new Date().toISOString() };
+        return sortClients(newClients);
+      });
+    });
+
+    return () => {
+      socket.off('connect');
+      socket.off('disconnect');
+      socket.off('systemInfoUpdate');
+      socket.off('systemInfo');
+    };
+  }, [debouncedFetchClients, sortClients]);
+
+  // Fetch initial data and set up ping config updates
+  useEffect(() => {
+    debouncedFetchClients();
+    fetchPingConfigs();
+
+    const configInterval = setInterval(fetchPingConfigs, 30000);
+
     return () => {
       clearInterval(configInterval);
-      socket.disconnect();
     };
   }, [debouncedFetchClients, fetchPingConfigs]);
 
@@ -556,29 +561,6 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     fetchPingConfigs();
   }, [fetchPingConfigs]);
-
-  // Handle system info updates
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleSystemInfo = (data: any) => {
-      setClients(prevClients => {
-        const index = prevClients.findIndex(c => c.hostname === data.hostname);
-        if (index === -1) {
-          return [...prevClients, { ...data, lastSeen: new Date().toISOString() }];
-        }
-        const newClients = [...prevClients];
-        newClients[index] = { ...newClients[index], ...data, lastSeen: new Date().toISOString() };
-        return newClients;
-      });
-    };
-
-    socket.on('systemInfo', handleSystemInfo);
-
-    return () => {
-      socket.off('systemInfo', handleSystemInfo);
-    };
-  }, [socket]);
 
   if (loading) {
     return loadingComponent;
