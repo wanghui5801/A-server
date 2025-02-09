@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import socketIOClient from 'socket.io-client';
 import DetailModal from './DetailModal';
 import '../styles/animations.css';
@@ -256,6 +256,8 @@ const Dashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isEditNameModalOpen, setIsEditNameModalOpen] = useState(false);
   const [serviceName, setServiceName] = useState<string>('Services');
+  const [socket, setSocket] = useState<any>(null);
+  const updateIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Replace localStorage effect with API call
   useEffect(() => {
@@ -381,13 +383,76 @@ const Dashboard: React.FC = () => {
     }
   }, [connected]);
 
+  // Replace socket initialization effect with optimized version
+  useEffect(() => {
+    // Initialize socket connection
+    const newSocket = socketIOClient(getSocketUrl(), {
+      transports: ['websocket', 'polling'],
+      path: '/socket.io',
+      autoConnect: true,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      timeout: 20000
+    });
+    setSocket(newSocket);
+
+    // Clear existing interval if any
+    if (updateIntervalRef.current) {
+      clearInterval(updateIntervalRef.current);
+    }
+
+    // Set up system info update interval with debounce
+    let lastRequestTime = 0;
+    updateIntervalRef.current = setInterval(async () => {
+      const now = Date.now();
+      // Ensure at least 2.9s between requests
+      if (now - lastRequestTime < 2900) {
+        return;
+      }
+      
+      try {
+        await fetch('/api/request-system-info', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        lastRequestTime = now;
+      } catch (error) {
+        console.error('Error requesting system info update:', error);
+      }
+    }, 3000);
+
+    // Clean up on unmount
+    return () => {
+      if (updateIntervalRef.current) {
+        clearInterval(updateIntervalRef.current);
+        updateIntervalRef.current = null;
+      }
+      if (newSocket) {
+        newSocket.disconnect();
+        newSocket.close();
+      }
+    };
+  }, []);
+
+  // Optimize debouncedFetchClients to prevent duplicate requests
   const debouncedFetchClients = useCallback(
     (() => {
       let timeoutId: NodeJS.Timeout;
+      let lastFetchTime = 0;
       return () => {
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
+        
+        const now = Date.now();
+        // Ensure at least 2.9s between fetches
+        if (now - lastFetchTime < 2900) {
+          return;
+        }
+
         timeoutId = setTimeout(async () => {
           try {
             const response = await fetch(`${getApiUrl()}/api/clients`, {
@@ -409,7 +474,8 @@ const Dashboard: React.FC = () => {
             setClients(sortedClients);
             setLoading(false);
             setError('');
-            setLastUpdate(Date.now());
+            setLastUpdate(now);
+            lastFetchTime = now;
           } catch (err) {
             console.error('Error fetching clients:', err);
             setError('Failed to fetch clients');
@@ -490,6 +556,29 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     fetchPingConfigs();
   }, [fetchPingConfigs]);
+
+  // Handle system info updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleSystemInfo = (data: any) => {
+      setClients(prevClients => {
+        const index = prevClients.findIndex(c => c.hostname === data.hostname);
+        if (index === -1) {
+          return [...prevClients, { ...data, lastSeen: new Date().toISOString() }];
+        }
+        const newClients = [...prevClients];
+        newClients[index] = { ...newClients[index], ...data, lastSeen: new Date().toISOString() };
+        return newClients;
+      });
+    };
+
+    socket.on('systemInfo', handleSystemInfo);
+
+    return () => {
+      socket.off('systemInfo', handleSystemInfo);
+    };
+  }, [socket]);
 
   if (loading) {
     return loadingComponent;

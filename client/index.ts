@@ -598,10 +598,8 @@ async function ping(target: string, port: number): Promise<number> {
     }, 1200);
 
     // Execute tcping with proper parameters
-    // -x 1: Single attempt
-    // -w 1: Wait timeout 1 second
-    // -C: Formatted output
-    execAsync(`tcping -x 1 -w 1 -C ${target} ${port}`)
+    // -n 1: Single attempt
+    execAsync(`tcping -n 1 ${target} ${port}`)
       .then(({ stdout, stderr }) => {
         clearTimeout(timeout);
         const output = stdout.trim();
@@ -614,8 +612,8 @@ async function ping(target: string, port: number): Promise<number> {
           stderr: stderr.trim()
         });
 
-        // Check for packet loss indicated by '-'
-        if (output.endsWith(' : -') || output.includes('failed') || output.includes('error')) {
+        // Check for packet loss or errors
+        if (output.includes('0 received') || output.includes('100% loss') || stderr.trim()) {
           log.debug('Ping packet loss detected', {
             target,
             port,
@@ -625,27 +623,26 @@ async function ping(target: string, port: number): Promise<number> {
           return;
         }
 
-        // Parse latency value
-        // Format: "hostname : latency"
-        const parts = output.split(' : ');
-        if (parts.length !== 2) {
-          log.debug('Invalid tcping output format', {
-            target,
-            port,
-            output
-          });
-          resolve(-1);
-          return;
-        }
-
-        const latency = parseFloat(parts[1]);
-        if (!isNaN(latency) && latency >= 0 && latency <= 5000) {
-          resolve(Math.round(latency * 100) / 100);
+        // Parse latency value from the new format
+        // Looking for pattern: "time=X.XXXms"
+        const latencyMatch = output.match(/time=(\d+\.\d+)ms/);
+        if (latencyMatch && latencyMatch[1]) {
+          const latency = parseFloat(latencyMatch[1]);
+          if (!isNaN(latency) && latency >= 0 && latency <= 5000) {
+            resolve(Math.round(latency * 100) / 100);
+          } else {
+            log.warn('Invalid latency value:', {
+              target,
+              port,
+              latency,
+              output
+            });
+            resolve(-1);
+          }
         } else {
-          log.warn('Invalid latency value:', {
+          log.debug('Could not parse latency from output', {
             target,
             port,
-            latency,
             output
           });
           resolve(-1);
@@ -741,43 +738,26 @@ async function updateSystemInfo() {
 socket.on('connect', async () => {
   log.info('Connected to server');
   try {
-    // Use cached system info if available and recent (less than 3s old)
-    const now = Date.now();
-    let systemInfo: SystemInfo;
-    
-    if (systemInfoState.info && (now - systemInfoState.lastUpdateTime < 3000)) {
-      systemInfo = systemInfoState.info;
-      log.debug('Using cached system info for registration', {
-        age: now - systemInfoState.lastUpdateTime
-      });
-    } else {
-      systemInfo = await getSystemInfo();
-      systemInfoState = {
-        info: systemInfo,
-        lastUpdateTime: now
-      };
-    }
-    
+    // Send initial system info
+    const systemInfo = await getSystemInfo();
     socket.emit('register', systemInfo);
     log.debug('Sent registration info', { hostname: systemInfo.hostname });
     
-    // Clear any existing timers first
-    for (const timer of timers) {
-      clearInterval(timer);
-      timers.delete(timer);
-    }
-    
-    // Set up new system info update timer
-    const systemInfoTimer = setInterval(updateSystemInfo, 3000);
-    (systemInfoTimer as PingTimer).isUpdateTimer = true;
-    timers.add(systemInfoTimer);
-    
     // Clear any existing ping schedules
     clearPingTimers();
-    
-    // Note: Don't set up ping timers here - they will be set up when server sends updatePingTargets
   } catch (error) {
     log.error('Error during connection setup:', error);
+  }
+});
+
+// Add handler for system info request
+socket.on('requestSystemInfo', async () => {
+  try {
+    const systemInfo = await getSystemInfo();
+    socket.emit('systemInfo', systemInfo);
+    log.debug('Sent system info on request', { hostname: systemInfo.hostname });
+  } catch (error) {
+    log.error('Error sending system info:', error);
   }
 });
 
@@ -787,14 +767,6 @@ socket.on('disconnect', (reason: string) => {
   
   // Clear all ping timers
   clearPingTimers();
-  
-  // Clear system info timer
-  for (const timer of timers) {
-    if (timer.isUpdateTimer) {
-      clearInterval(timer);
-      timers.delete(timer);
-    }
-  }
   
   // If it's a server-initiated disconnection, try to reconnect
   if (reason === 'io server disconnect') {

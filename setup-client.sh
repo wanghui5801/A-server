@@ -71,29 +71,42 @@ install_node() {
 
 # Install tcping and dependencies
 install_tcping() {
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        if [ -f /etc/os-release ]; then
-            . /etc/os-release
-            case "$ID" in
-                "ubuntu"|"debian")
-                    apt-get install -y tcptraceroute bc
-                    ;;
-                "centos"|"rhel"|"fedora")
-                    yum install -y tcptraceroute bc
-                    ;;
-                "opensuse"|"sles"|"arch"|"manjaro")
-                    zypper install -y bc
-                    ;;
-            esac
-            
-            # Install tcping script
-            echo "Installing tcping..."
-            wget -O /usr/local/bin/tcping http://www.vdberg.org/~richard/tcpping
-            chmod +x /usr/local/bin/tcping
-            # Create symlink to /usr/bin for compatibility
-            ln -sf /usr/local/bin/tcping /usr/bin/tcping
-        fi
+    # Install dependencies
+    apt-get update
+    apt-get install -y wget unzip
+
+    # Install tcping script
+    echo "Installing tcping..."
+    
+    # Detect architecture
+    ARCH=$(uname -m)
+    
+    # Set download URL based on architecture
+    if [ "$ARCH" = "x86_64" ]; then
+        TCPING_URL="https://github.com/nodeseeker/tcping/releases/download/v1.4.5/tcping-linux-amd64.zip"
+    elif [[ "$ARCH" = "aarch64" || "$ARCH" = "arm64" || "$ARCH" = "armv8" ]]; then
+        TCPING_URL="https://github.com/nodeseeker/tcping/releases/download/v1.4.5/tcping-linux-arm.zip"
+    else
+        echo "Unsupported architecture: $ARCH"
+        exit 1
     fi
+    
+    # Create temporary directory
+    TMP_DIR=$(mktemp -d)
+    cd $TMP_DIR || exit 1
+    
+    # Download and install tcping
+    wget -O tcping.zip "$TCPING_URL"
+    unzip tcping.zip
+    chmod +x tcping
+    
+    # Use sudo to move files and create symlink
+    sudo install -m 755 tcping /usr/local/bin/tcping
+    sudo ln -sf /usr/local/bin/tcping /usr/bin/tcping
+    
+    # Clean up
+    cd - || exit 1
+    rm -rf "$TMP_DIR"
 }
 
 # Check Node.js version

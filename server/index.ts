@@ -2222,6 +2222,18 @@ app.post('/api/service-name', async (req, res) => {
   }
 });
 
+// Add broadcast system info request function
+function broadcastSystemInfoRequest() {
+  io.emit('requestSystemInfo');
+  logger.debug('Broadcasted system info request to all clients');
+}
+
+// Add endpoint for frontend to trigger system info update
+app.post('/api/request-system-info', (req, res) => {
+  broadcastSystemInfoRequest();
+  res.json({ success: true });
+});
+
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {
   logger.info(`Server running on port ${PORT}`);
