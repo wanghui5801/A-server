@@ -189,12 +189,10 @@ async function getCpuUsage(): Promise<number> {
 
     const values = cpuLine.split(/\s+/).slice(1).map(Number);
     
-    // Ensure all required CPU time values exist
     if (values.length < 8) {
       throw new Error('Incomplete CPU stats data');
     }
 
-    // Validate all values are valid numbers
     if (values.some(v => isNaN(v) || v < 0)) {
       throw new Error('Invalid CPU stats values');
     }
@@ -213,7 +211,8 @@ async function getCpuUsage(): Promise<number> {
     if (!lastCpuInfo) {
       lastCpuInfo = current;
       // Use precise time interval
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const PRECISE_INTERVAL = 1000; // 精确的1秒
+      await new Promise(resolve => setTimeout(resolve, PRECISE_INTERVAL));
       return getCpuUsage();
     }
 
@@ -247,7 +246,6 @@ async function getCpuUsage(): Promise<number> {
 
     const cpuUsage = (activeDelta / totalDelta) * 100;
     
-    // Log detailed CPU usage information
     log.debug('CPU usage calculation:', {
       total: totalDelta,
       active: activeDelta,
@@ -256,7 +254,6 @@ async function getCpuUsage(): Promise<number> {
       usage: cpuUsage.toFixed(2) + '%'
     });
 
-    // Ensure return value is within valid range
     return Math.min(100, Math.max(0, Math.round(cpuUsage * 100) / 100));
 
   } catch (error) {
@@ -271,7 +268,6 @@ async function getMemoryUsage(): Promise<number> {
     const memContent = await fs.promises.readFile('/proc/meminfo', 'utf8');
     const memInfo: { [key: string]: number } = {};
 
-    // Parse memory information
     memContent.split('\n').forEach(line => {
       const matches = line.match(/^(\w+):\s+(\d+)/);
       if (matches) {
@@ -282,7 +278,6 @@ async function getMemoryUsage(): Promise<number> {
       }
     });
 
-    // Verify if required memory information exists
     const requiredKeys = ['MemTotal', 'MemFree', 'Buffers', 'Cached', 'SReclaimable', 'Shmem'];
     const missingKeys = requiredKeys.filter(key => !(key in memInfo));
     
@@ -291,19 +286,48 @@ async function getMemoryUsage(): Promise<number> {
     }
 
     const total = memInfo['MemTotal'];
-    const free = memInfo['MemFree'];
-    const buffers = memInfo['Buffers'];
-    const cached = memInfo['Cached'];
-    const sReclaimable = memInfo['SReclaimable'];
-    const shmem = memInfo['Shmem'];
-
+    
     // Validate total memory size
     if (total <= 0) {
       throw new Error('Invalid total memory size');
     }
 
-    // Calculate actual memory usage
-    const used = total - free - buffers - (cached + sReclaimable) + shmem;
+    let used: number;
+    let usagePercentage: number;
+
+    // 优先使用 MemAvailable 计算（Linux 3.14+ 内核支持）
+    if ('MemAvailable' in memInfo && memInfo['MemAvailable'] > 0) {
+      used = total - memInfo['MemAvailable'];
+      usagePercentage = (used / total) * 100;
+      
+      log.debug('Memory usage calculation (using MemAvailable):', {
+        total: `${total} KB`,
+        available: `${memInfo['MemAvailable']} KB`,
+        used: `${used} KB`,
+        percentage: `${usagePercentage.toFixed(2)}%`
+      });
+    } else {
+      // 回退到传统计算方法
+      const free = memInfo['MemFree'];
+      const buffers = memInfo['Buffers'];
+      const cached = memInfo['Cached'];
+      const sReclaimable = memInfo['SReclaimable'];
+      const shmem = memInfo['Shmem'];
+
+      used = total - free - buffers - (cached + sReclaimable) + shmem;
+      usagePercentage = (used / total) * 100;
+      
+      log.debug('Memory usage calculation (traditional):', {
+        total: `${total} KB`,
+        free: `${free} KB`,
+        buffers: `${buffers} KB`,
+        cached: `${cached} KB`,
+        sReclaimable: `${sReclaimable} KB`,
+        shmem: `${shmem} KB`,
+        used: `${used} KB`,
+        percentage: `${usagePercentage.toFixed(2)}%`
+      });
+    }
     
     // Validate calculation results
     if (used < 0) {
@@ -316,21 +340,7 @@ async function getMemoryUsage(): Promise<number> {
       return 100;
     }
 
-    const usagePercentage = (used / total) * 100;
-    
-    // Log detailed memory usage information
-    log.debug('Memory usage calculation:', {
-      total: `${total} KB`,
-      free: `${free} KB`,
-      buffers: `${buffers} KB`,
-      cached: `${cached} KB`,
-      sReclaimable: `${sReclaimable} KB`,
-      shmem: `${shmem} KB`,
-      used: `${used} KB`,
-      percentage: `${usagePercentage.toFixed(2)}%`
-    });
-
-    return Math.round(usagePercentage * 100) / 100;
+    return Math.min(100, Math.max(0, Math.round(usagePercentage * 100) / 100));
 
   } catch (error) {
     log.error('Error getting memory usage:', error);
@@ -339,14 +349,29 @@ async function getMemoryUsage(): Promise<number> {
 }
 
 // Get disk usage
+interface DiskUsageInfo {
+  usage: number;
+  inodeUsage: number;
+}
+
 async function getDiskUsage(): Promise<number> {
   try {
-    // Use -l parameter to show only local filesystems, exclude network filesystems
+    // 获取磁盘空间使用情况
     const { stdout } = await execAsync(
       'df -Pl | grep -vE "^(tmpfs|devtmpfs|udev|none|overlay|shm|snap|squashfs|rootfs|/dev/loop)"'
     );
     
+    // 获取inode使用情况
+    const { stdout: inodeStdout } = await execAsync(
+      'df -iPl | grep -vE "^(tmpfs|devtmpfs|udev|none|overlay|shm|snap|squashfs|rootfs|/dev/loop)"'
+    ).catch(err => {
+      log.warn('Failed to get inode usage, continuing with space usage only:', err);
+      return { stdout: '' };
+    });
+
     const lines = stdout.trim().split('\n');
+    const inodeLines = inodeStdout.trim().split('\n');
+
     if (lines.length <= 1) {
       log.warn('No valid disk partitions found');
       return 0;
@@ -354,31 +379,29 @@ async function getDiskUsage(): Promise<number> {
 
     let totalSize = 0;
     let totalUsed = 0;
+    let totalInodes = 0;
+    let usedInodes = 0;
     const mountPoints: string[] = [];
 
-    // Skip header line
+    // 处理磁盘空间使用情况
     lines.slice(1).forEach(line => {
       const parts = line.trim().split(/\s+/);
-      // df -P output format: Filesystem 1K-blocks Used Available Use% Mounted on
       if (parts.length < 6) {
         log.warn('Invalid df output format:', { line });
         return;
       }
 
-      const filesystem = parts[0];
-      const size = parseInt(parts[1]); // Total size (1K-blocks)
-      const used = parseInt(parts[2]); // Used space (1K-blocks)
+      const size = parseInt(parts[1]);
+      const used = parseInt(parts[2]);
       const mountPoint = parts[5];
 
-      // Validate numeric values
       if (isNaN(size) || isNaN(used) || size <= 0) {
-        log.warn('Invalid disk size or usage:', { filesystem, size, used });
+        log.warn('Invalid disk size or usage:', { size, used });
         return;
       }
 
-      // Verify used space doesn't exceed total size
       if (used > size) {
-        log.warn('Used space exceeds total size:', { filesystem, size, used });
+        log.warn('Used space exceeds total size:', { size, used });
         return;
       }
 
@@ -387,24 +410,41 @@ async function getDiskUsage(): Promise<number> {
       mountPoints.push(mountPoint);
     });
 
-    // Ensure valid data exists
+    // 处理inode使用情况
+    if (inodeLines.length > 1) {
+      inodeLines.slice(1).forEach(line => {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length < 6) return;
+
+        const inodes = parseInt(parts[1]);
+        const usedInodeCount = parseInt(parts[2]);
+
+        if (!isNaN(inodes) && !isNaN(usedInodeCount) && inodes > 0) {
+          totalInodes += inodes;
+          usedInodes += usedInodeCount;
+        }
+      });
+    }
+
     if (totalSize === 0) {
       log.warn('No valid disk data found');
       return 0;
     }
 
-    const usagePercentage = (totalUsed / totalSize) * 100;
+    const spaceUsagePercentage = (totalUsed / totalSize) * 100;
+    const inodeUsagePercentage = totalInodes > 0 ? (usedInodes / totalInodes) * 100 : 0;
+
+    // 使用空间使用率和inode使用率的较大值
+    const finalUsage = Math.max(spaceUsagePercentage, inodeUsagePercentage);
     
-    // Log detailed disk usage information
     log.debug('Disk usage calculation:', {
-      totalSize: `${totalSize} KB`,
-      totalUsed: `${totalUsed} KB`,
-      percentage: `${usagePercentage.toFixed(2)}%`,
+      spaceUsage: `${spaceUsagePercentage.toFixed(2)}%`,
+      inodeUsage: `${inodeUsagePercentage.toFixed(2)}%`,
+      finalUsage: `${finalUsage.toFixed(2)}%`,
       mountPoints: mountPoints.join(', ')
     });
     
-    // Ensure return value is within valid range
-    return Math.min(100, Math.max(0, Math.round(usagePercentage * 100) / 100));
+    return Math.min(100, Math.max(0, Math.round(finalUsage * 100) / 100));
 
   } catch (error) {
     log.error('Error getting disk usage:', error);

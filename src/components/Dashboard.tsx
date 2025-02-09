@@ -675,6 +675,38 @@ const Dashboard: React.FC = () => {
                     )}
                   </div>
 
+                  {/* System Info and Uptime with enhanced styling */}
+                  <div className="flex items-center justify-between px-0.5">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center bg-[#252525] rounded-lg px-3 py-1.5 text-xs font-medium text-gray-300 border border-gray-800/20 shadow-sm group-hover:bg-[#2a2a2a] transition-all duration-300 hover:shadow-md">
+                        <svg className="w-3.5 h-3.5 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                        </svg>
+                        <span className="text-gray-400 group-hover:text-gray-300 transition-colors duration-300">
+                          {client.cpuThreads || 0}C·{Math.round((client.memoryTotal || 0) / (1024 * 1024 * 1024))}G·
+                          {Math.round((client.diskTotal || 0) / (1024 * 1024 * 1024))}G
+                        </span>
+                      </div>
+                      <div className="flex items-center bg-[#252525] rounded-lg px-3 py-1.5 text-xs font-medium text-gray-300 border border-gray-800/20 shadow-sm group-hover:bg-[#2a2a2a] transition-all duration-300 hover:shadow-md">
+                        <svg className="w-3.5 h-3.5 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="text-gray-400 group-hover:text-gray-300 transition-colors duration-300">
+                          {(() => {
+                            const uptime = client.uptime || 0;
+                            const days = Math.floor(uptime / 86400);
+                            const hours = Math.floor((uptime % 86400) / 3600);
+                            const minutes = Math.floor((uptime % 3600) / 60);
+                            
+                            if (days > 0) return `${days}d ${hours}h`;
+                            if (hours > 0) return `${hours}h ${minutes}m`;
+                            return `${minutes}m`;
+                          })()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="flex flex-col gap-2">
                     {[
                       { value: client.cpuUsage, label: 'CPU', type: 'cpu' },
