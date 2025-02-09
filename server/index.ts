@@ -600,6 +600,21 @@ async function sendPingTargetsToClient(socket: any) {
   }
 }
 
+// Add a single timer for system info updates
+let systemInfoTimer: NodeJS.Timeout | null = null;
+
+function startSystemInfoTimer() {
+  // Clear existing timer if any
+  if (systemInfoTimer) {
+    clearInterval(systemInfoTimer);
+  }
+
+  // Create new timer
+  systemInfoTimer = setInterval(() => {
+    broadcastSystemInfoRequest();
+  }, 3000);
+}
+
 // Modify socket connection handling
 io.on('connection', (socket) => {
   logger.info('Client connected:', socket.id);
@@ -952,6 +967,12 @@ io.on('connection', (socket) => {
         }
       }
     );
+
+    // If no clients are connected, clear the timer
+    if (io.engine.clientsCount === 0 && systemInfoTimer) {
+      clearInterval(systemInfoTimer);
+      systemInfoTimer = null;
+    }
   });
 
   // SSH connection handling
@@ -1153,7 +1174,18 @@ io.on('connection', (socket) => {
       sshClient.end();
       sshClient = null;
     }
+
+    // If no clients are connected, clear the timer
+    if (io.engine.clientsCount === 0 && systemInfoTimer) {
+      clearInterval(systemInfoTimer);
+      systemInfoTimer = null;
+    }
   });
+
+  // Start the system info timer if it's not already running
+  if (!systemInfoTimer) {
+    startSystemInfoTimer();
+  }
 });
 
 // Add type definitions
@@ -2232,6 +2264,21 @@ function broadcastSystemInfoRequest() {
 app.post('/api/request-system-info', (req, res) => {
   broadcastSystemInfoRequest();
   res.json({ success: true });
+});
+
+// Add cleanup on server shutdown
+process.on('SIGTERM', () => {
+  if (systemInfoTimer) {
+    clearInterval(systemInfoTimer);
+  }
+  // ... existing shutdown code ...
+});
+
+process.on('SIGINT', () => {
+  if (systemInfoTimer) {
+    clearInterval(systemInfoTimer);
+  }
+  // ... existing shutdown code ...
 });
 
 const PORT = process.env.PORT || 3000;

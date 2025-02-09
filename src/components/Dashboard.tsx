@@ -257,7 +257,6 @@ const Dashboard: React.FC = () => {
   const [isEditNameModalOpen, setIsEditNameModalOpen] = useState(false);
   const [serviceName, setServiceName] = useState<string>('Services');
   const socketRef = useRef<any>(null);
-  const updateIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Replace localStorage effect with API call
   useEffect(() => {
@@ -441,28 +440,6 @@ const Dashboard: React.FC = () => {
 
     return () => {
       newSocket.disconnect();
-    };
-  }, []);
-
-  // Set up system info request interval
-  useEffect(() => {
-    updateIntervalRef.current = setInterval(() => {
-      try {
-        fetch(`${getApiUrl()}/api/request-system-info`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-      } catch (error) {
-        console.error('Error requesting system info:', error);
-      }
-    }, 3000);
-
-    return () => {
-      if (updateIntervalRef.current) {
-        clearInterval(updateIntervalRef.current);
-      }
     };
   }, []);
 
