@@ -68,6 +68,7 @@ interface DetailModalProps {
   client: Client;
   onClose: () => void;
   pingConfigs?: PingConfig[];
+  isClosing?: boolean;
 }
 
 interface Dataset {
@@ -82,7 +83,7 @@ interface Dataset {
   lossRate: string;
 }
 
-const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, pingConfigs: initialPingConfigs = [] }) => {
+const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, pingConfigs: initialPingConfigs = [], isClosing = false }) => {
   const [chartData, setChartData] = useState<any>(null);
   const [localClient, setLocalClient] = useState<Client>(client);
   const [selectedTarget, setSelectedTarget] = useState<string>('');
@@ -398,8 +399,8 @@ const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, p
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
-      <div className="bg-[#1C1C1C] rounded-xl p-4 sm:p-6 w-[calc(100%-2rem)] sm:w-full max-w-4xl h-[calc(100vh-4rem)] sm:h-auto overflow-hidden modal-enter border border-gray-800/20 mx-auto shadow-2xl hover:shadow-3xl transition-shadow duration-300">
+    <div className={`fixed inset-0 bg-black/60 flex items-center justify-center z-50 ${isClosing ? 'backdrop-exit' : 'backdrop-enter'}`}>
+      <div className={`bg-[#1C1C1C] rounded-xl p-4 sm:p-6 w-[calc(100%-2rem)] sm:w-full max-w-4xl h-[calc(100vh-4rem)] sm:h-auto overflow-hidden border border-gray-800/20 mx-auto shadow-2xl hover:shadow-3xl transition-shadow duration-300 ${isClosing ? 'modal-exit' : 'modal-enter'}`}>
         <div className="flex justify-between items-center mb-5 sm:mb-6">
           <div className="flex items-center gap-2.5 sm:gap-3 animate-slide-down">
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-100 hover:text-white transition-colors duration-300 truncate group-hover:text-white">{client.hostname}</h2>
@@ -433,7 +434,7 @@ const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, p
           </button>
         </div>
 
-        <div className="h-[calc(100vh-10rem)] sm:h-auto overflow-y-auto hide-scrollbar">
+        <div className={`h-[calc(100vh-10rem)] sm:h-auto overflow-y-auto hide-scrollbar ${isClosing ? 'opacity-0 transition-opacity duration-300' : 'opacity-100 transition-opacity duration-300'}`}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-5 sm:mb-6">
             {[
               { 

@@ -110,8 +110,17 @@ const EditServiceNameModal = React.memo(({ isOpen, onClose, initialName, onUpdat
   const [serviceName, setServiceName] = useState(initialName);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
 
   if (!isOpen) return null;
+
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsClosing(false);
+      onClose();
+    }, 300);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,7 +130,7 @@ const EditServiceNameModal = React.memo(({ isOpen, onClose, initialName, onUpdat
     try {
       await new Promise(resolve => setTimeout(resolve, 500));
       onUpdate(serviceName);
-      onClose();
+      handleClose();
     } catch (err) {
       setError('Failed to update service name');
     } finally {
@@ -130,13 +139,13 @@ const EditServiceNameModal = React.memo(({ isOpen, onClose, initialName, onUpdat
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-0 animate-fade-in">
-      <div className="bg-[#1C1C1C] rounded-xl w-full sm:w-[480px] border border-gray-800/20 shadow-2xl animate-slide-up">
+    <div className={`fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 sm:p-0 ${isClosing ? 'backdrop-exit' : 'backdrop-enter'}`}>
+      <div className={`bg-[#1C1C1C] rounded-xl w-full sm:w-[480px] border border-gray-800/20 shadow-2xl ${isClosing ? 'modal-exit' : 'modal-enter'}`}>
         <div className="p-4 sm:p-6">
           <div className="flex justify-between items-center mb-5 sm:mb-6">
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-100 hover:text-white transition-colors duration-300">Edit Service Name</h2>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="text-gray-400 hover:text-gray-200 transition-colors duration-300 p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10 group"
             >
               <svg className="w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -257,6 +266,7 @@ const Dashboard: React.FC = () => {
   const [isEditNameModalOpen, setIsEditNameModalOpen] = useState(false);
   const [serviceName, setServiceName] = useState<string>('Services');
   const socketRef = useRef<any>(null);
+  const [isDetailModalClosing, setIsDetailModalClosing] = useState(false);
 
   // Replace localStorage effect with API call
   useEffect(() => {
@@ -539,6 +549,14 @@ const Dashboard: React.FC = () => {
     fetchPingConfigs();
   }, [fetchPingConfigs]);
 
+  const handleDetailModalClose = () => {
+    setIsDetailModalClosing(true);
+    setTimeout(() => {
+      setIsDetailModalClosing(false);
+      setSelectedClient(null);
+    }, 300);
+  };
+
   if (loading) {
     return loadingComponent;
   }
@@ -802,11 +820,9 @@ const Dashboard: React.FC = () => {
       {selectedClient && (
         <DetailModal
           client={selectedClient}
-          onClose={() => {
-            console.log('Closing modal, client data:', selectedClient);
-            setSelectedClient(null);
-          }}
+          onClose={handleDetailModalClose}
           pingConfigs={pingConfigs}
+          isClosing={isDetailModalClosing}
         />
       )}
 

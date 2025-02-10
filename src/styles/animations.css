@@ -19,6 +19,21 @@
   to { opacity: 1; transform: scale(1); }
 }
 
+@keyframes modal-fade-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.95); }
+}
+
+@keyframes backdrop-fade-in {
+  from { opacity: 0; backdrop-filter: blur(0); }
+  to { opacity: 1; backdrop-filter: blur(8px); }
+}
+
+@keyframes backdrop-fade-out {
+  from { opacity: 1; backdrop-filter: blur(8px); }
+  to { opacity: 0; backdrop-filter: blur(0); }
+}
+
 @keyframes elegant-rotate {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -51,6 +66,18 @@
 
 .modal-enter {
   animation: modal-fade-in 0.3s ease-out;
+}
+
+.modal-exit {
+  animation: modal-fade-out 0.3s ease-out forwards;
+}
+
+.backdrop-enter {
+  animation: backdrop-fade-in 0.3s ease-out forwards;
+}
+
+.backdrop-exit {
+  animation: backdrop-fade-out 0.3s ease-out forwards;
 }
 
 .loading-spinner {

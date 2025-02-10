@@ -103,6 +103,7 @@ const SSHTerminalModal = ({
   const [error, setError] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAutoLogging, setIsAutoLogging] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   
   const terminalRef = useRef<HTMLDivElement>(null);
   const terminalInstance = useRef<Terminal | null>(null);
@@ -500,28 +501,32 @@ const SSHTerminalModal = ({
   };
 
   const handleClose = () => {
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.close();
-    }
-    if (terminalInstance.current) {
-      terminalInstance.current.dispose();
-    }
-    setIsAuthenticated(false);
-    // 只在没有保存的凭据时才清除用户名和密码
-    const savedData = localStorage.getItem('ssh_credentials');
-    if (!savedData) {
-      setUsername('');
-      setPassword('');
-    }
-    setError('');
-    onClose();
+    setIsClosing(true);
+    setTimeout(() => {
+      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+        socketRef.current.close();
+      }
+      if (terminalInstance.current) {
+        terminalInstance.current.dispose();
+      }
+      setIsAuthenticated(false);
+      // 只在没有保存的凭据时才清除用户名和密码
+      const savedData = localStorage.getItem('ssh_credentials');
+      if (!savedData) {
+        setUsername('');
+        setPassword('');
+      }
+      setError('');
+      setIsClosing(false);
+      onClose();
+    }, 300); // 动画持续时间
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-2 sm:p-4">
-      <div className="bg-[#1C1C1C] rounded-xl shadow-2xl w-full max-w-5xl h-[95vh] sm:h-[85vh] border border-gray-800/30 modal-enter">
+    <div className={`fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-2 sm:p-4 ${isClosing ? 'backdrop-exit' : 'backdrop-enter'}`}>
+      <div className={`bg-[#1C1C1C] rounded-xl shadow-2xl w-full max-w-5xl h-[95vh] sm:h-[85vh] border border-gray-800/30 ${isClosing ? 'modal-exit' : 'modal-enter'}`}>
         <div className="flex justify-between items-center h-14 px-3 sm:px-6 border-b border-gray-800/30">
           <div className="flex items-center gap-2.5 sm:gap-3 animate-slide-down overflow-x-auto pb-2 sm:pb-0">
             <h2 className="text-base sm:text-lg font-medium text-gray-100 whitespace-nowrap">SSH Terminal</h2>

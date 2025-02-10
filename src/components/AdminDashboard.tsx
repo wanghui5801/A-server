@@ -66,6 +66,20 @@ const ChangePasswordModal = React.memo(({ isOpen, onClose }: {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsVisible(true);
+    }
+  }, [isOpen]);
+
+  const handleClose = () => {
+    setIsVisible(false);
+    setTimeout(() => {
+      onClose();
+    }, 200);
+  };
 
   if (!isOpen) return null;
 
@@ -127,14 +141,14 @@ const ChangePasswordModal = React.memo(({ isOpen, onClose }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-0 animate-fade-in">
-      <div className="bg-[#1C1C1C] rounded-xl w-full sm:w-[480px] border border-gray-800/20 shadow-2xl animate-slide-up">
+    <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-0 transition-all duration-200 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
+      <div className={`bg-[#1C1C1C] rounded-xl w-full sm:w-[480px] border border-gray-800/20 shadow-2xl transition-all duration-200 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
         <div className="p-4 sm:p-6">
           <div className="flex justify-between items-center mb-5 sm:mb-6">
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-100 hover:text-white transition-colors duration-300">Change Admin Password</h2>
             <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-200 transition-colors duration-300 p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10 group"
+              onClick={handleClose}
+              className="text-gray-400 hover:text-gray-200 transition-all duration-300 p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10 group"
             >
               <svg className="w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -188,7 +202,7 @@ const ChangePasswordModal = React.memo(({ isOpen, onClose }: {
             <div className="flex justify-end gap-3">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="px-4 py-2 text-gray-400 hover:text-gray-200 transition-colors duration-300 rounded-lg hover:bg-gray-800/50 backdrop-blur-sm border border-gray-800/10"
                 disabled={isLoading}
               >
@@ -228,6 +242,20 @@ const AddTagModal = React.memo(({ isOpen, onClose, onAddTag }: {
   const [tag, setTag] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsVisible(true);
+    }
+  }, [isOpen]);
+
+  const handleClose = () => {
+    setIsVisible(false);
+    setTimeout(() => {
+      onClose();
+    }, 200);
+  };
 
   if (!isOpen) return null;
 
@@ -245,7 +273,7 @@ const AddTagModal = React.memo(({ isOpen, onClose, onAddTag }: {
     try {
       await onAddTag(tag.trim());
       setTag('');
-      onClose();
+      handleClose();
     } catch (err) {
       setError('Failed to add tag');
     } finally {
@@ -254,13 +282,13 @@ const AddTagModal = React.memo(({ isOpen, onClose, onAddTag }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
-      <div className="bg-[#1C1C1C] rounded-xl p-4 sm:p-6 w-full max-w-md border border-gray-800/20 shadow-2xl animate-slide-up">
+    <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 transition-all duration-200 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
+      <div className={`bg-[#1C1C1C] rounded-xl p-4 sm:p-6 w-full max-w-md border border-gray-800/20 shadow-2xl transition-all duration-200 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
         <div className="flex justify-between items-center mb-5 sm:mb-6">
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-100 hover:text-white transition-colors duration-300">Add Tag</h2>
           <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-200 transition-colors duration-300 p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10 group"
+            onClick={handleClose}
+            className="text-gray-400 hover:text-gray-200 transition-all duration-300 p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10 group"
           >
             <svg className="w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -294,7 +322,7 @@ const AddTagModal = React.memo(({ isOpen, onClose, onAddTag }: {
           <div className="flex justify-end gap-3">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-4 py-2 text-gray-400 hover:text-gray-200 transition-colors duration-300 rounded-lg hover:bg-gray-800/50 backdrop-blur-sm border border-gray-800/10"
               disabled={isLoading}
             >
@@ -333,6 +361,20 @@ const AddClientModal = React.memo(({ isOpen, onClose, onAddClient }: {
   const [newHostname, setNewHostname] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsVisible(true);
+    }
+  }, [isOpen]);
+
+  const handleClose = () => {
+    setIsVisible(false);
+    setTimeout(() => {
+      onClose();
+    }, 200);
+  };
 
   if (!isOpen) return null;
 
@@ -343,7 +385,7 @@ const AddClientModal = React.memo(({ isOpen, onClose, onAddClient }: {
       await onAddClient(newHostname);
       setNewHostname('');
       setError('');
-      onClose();
+      handleClose();
     } catch (err: any) {
       setError(err.message || 'Failed to add client');
     } finally {
@@ -352,14 +394,14 @@ const AddClientModal = React.memo(({ isOpen, onClose, onAddClient }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-0 animate-fade-in">
-      <div className="bg-[#1C1C1C] rounded-xl w-full sm:w-[480px] border border-gray-800/20 shadow-2xl animate-slide-up">
+    <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-0 transition-all duration-200 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
+      <div className={`bg-[#1C1C1C] rounded-xl w-full sm:w-[480px] border border-gray-800/20 shadow-2xl transition-all duration-200 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
         <div className="p-4 sm:p-6">
           <div className="flex justify-between items-center mb-5 sm:mb-6">
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-100 hover:text-white transition-colors duration-300">Add Monitoring Client</h2>
             <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-200 transition-colors duration-300 p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10 group"
+              onClick={handleClose}
+              className="text-gray-400 hover:text-gray-200 transition-all duration-300 p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10 group"
             >
               <svg className="w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -393,7 +435,7 @@ const AddClientModal = React.memo(({ isOpen, onClose, onAddClient }: {
             <div className="flex justify-end gap-3">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="px-4 py-2 text-gray-400 hover:text-gray-200 transition-colors duration-300 rounded-lg hover:bg-gray-800/50 backdrop-blur-sm border border-gray-800/10"
                 disabled={isLoading}
               >
@@ -439,6 +481,20 @@ const PingConfigModal = React.memo(({ isOpen, onClose, pingConfigs, onAddConfig,
   const [newPingInterval, setNewPingInterval] = useState('5');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsVisible(true);
+    }
+  }, [isOpen]);
+
+  const handleClose = () => {
+    setIsVisible(false);
+    setTimeout(() => {
+      onClose();
+    }, 200);
+  };
 
   if (!isOpen) return null;
 
@@ -484,6 +540,7 @@ const PingConfigModal = React.memo(({ isOpen, onClose, pingConfigs, onAddConfig,
       setNewPingPort('80');
       setNewPingInterval('5');
       setError('');
+      // Remove handleClose() here to keep the modal open
     } catch (err: any) {
       setError(err.message || 'Failed to add ping configuration');
     } finally {
@@ -492,14 +549,14 @@ const PingConfigModal = React.memo(({ isOpen, onClose, pingConfigs, onAddConfig,
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-0 animate-fade-in">
-      <div className="bg-[#1C1C1C] rounded-xl w-full sm:w-auto max-w-2xl border border-gray-800/20 shadow-2xl animate-slide-up">
+    <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-0 transition-all duration-200 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
+      <div className={`bg-[#1C1C1C] rounded-xl w-full sm:w-auto max-w-2xl border border-gray-800/20 shadow-2xl transition-all duration-200 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
         <div className="p-4 sm:p-6">
           <div className="flex justify-between items-center mb-5 sm:mb-6">
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-100 hover:text-white transition-colors duration-300">Ping Configuration Management</h2>
             <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-200 transition-colors duration-300 p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10 group"
+              onClick={handleClose}
+              className="text-gray-400 hover:text-gray-200 transition-all duration-300 p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10 group"
             >
               <svg className="w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -645,17 +702,39 @@ const ConfirmDialog = React.memo(({ isOpen, onClose, onConfirm, title, message }
   title: string;
   message: string;
 }) => {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsVisible(true);
+    }
+  }, [isOpen]);
+
+  const handleClose = () => {
+    setIsVisible(false);
+    setTimeout(() => {
+      onClose();
+    }, 200);
+  };
+
+  const handleConfirm = () => {
+    setIsVisible(false);
+    setTimeout(() => {
+      onConfirm();
+    }, 200);
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-0 animate-fade-in">
-      <div className="bg-[#1C1C1C] rounded-xl w-full sm:w-auto max-w-md border border-gray-800/20 shadow-2xl animate-slide-up">
+    <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-0 transition-all duration-200 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
+      <div className={`bg-[#1C1C1C] rounded-xl w-full sm:w-auto max-w-md border border-gray-800/20 shadow-2xl transition-all duration-200 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
         <div className="p-4 sm:p-6">
           <div className="flex justify-between items-center mb-5 sm:mb-6">
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-100 hover:text-white transition-colors duration-300">{title}</h2>
             <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-200 transition-colors duration-300 p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10 group"
+              onClick={handleClose}
+              className="text-gray-400 hover:text-gray-200 transition-all duration-300 p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10 group"
             >
               <svg className="w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -668,14 +747,14 @@ const ConfirmDialog = React.memo(({ isOpen, onClose, onConfirm, title, message }
           <div className="flex justify-end gap-3">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-4 py-2 text-gray-400 hover:text-gray-200 transition-colors duration-300 rounded-lg hover:bg-gray-800/50 backdrop-blur-sm border border-gray-800/10"
             >
               Cancel
             </button>
             <button
               type="button"
-              onClick={onConfirm}
+              onClick={handleConfirm}
               className="px-4 py-2 bg-red-500/90 text-white rounded-lg hover:bg-red-500/80 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg shadow-red-500/20 active:scale-95 backdrop-blur-sm border border-red-400/20"
             >
               Confirm Delete
@@ -689,7 +768,7 @@ const ConfirmDialog = React.memo(({ isOpen, onClose, onConfirm, title, message }
 
 const AdminDashboard: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [clients, setClients] = useState<MonitoredClient[]>([]);
   const [pingConfigs, setPingConfigs] = useState<PingConfig[]>([]);
@@ -734,11 +813,11 @@ const AdminDashboard: React.FC = () => {
         }))
         .sort((a: MonitoredClient, b: MonitoredClient) => b.sort_order - a.sort_order);
       setClients(clientsWithPublicIP);
-      setLoading(false);
+      setIsLoading(false);
     } catch (err) {
       console.error('Error fetching monitored clients:', err);
       setError('Failed to fetch monitored client list');
-      setLoading(false);
+      setIsLoading(false);
     }
   }, []);
 
@@ -786,14 +865,6 @@ const AdminDashboard: React.FC = () => {
     }
   }, []);
 
-  // Ensure we fetch the server IP periodically
-  useEffect(() => {
-    fetchServerIP(); // Initial fetch
-    const serverIPInterval = setInterval(fetchServerIP, 30000); // Refresh every 30 seconds
-    
-    return () => clearInterval(serverIPInterval);
-  }, [fetchServerIP]);
-
   // Initialize socket event listeners when component mounts
   useEffect(() => {
     if (typeof window === 'undefined' || !socket) return;
@@ -803,8 +874,7 @@ const AdminDashboard: React.FC = () => {
         console.log('Socket connected successfully');
         setConnected(true);
         setError('');
-        fetchClients();
-        fetchPingConfig();
+        // 移除这里的重复调用，因为这些数据会通过定时器自动更新
       };
 
       const handleDisconnect = (reason: string) => {
@@ -841,25 +911,46 @@ const AdminDashboard: React.FC = () => {
     };
 
     return handleSocketEvents();
-  }, [fetchClients, fetchPingConfig]);
+  }, []);  // 移除不必要的依赖
 
-  // Optimize periodic updates
+  // 合并所有数据获取定时器到一个 useEffect 中
   useEffect(() => {
-    // Get initial data immediately
-    fetchClients();
-    fetchPingConfig();
-
-    // Set update interval (update client data every 5 seconds)
-    const clientsInterval = setInterval(fetchClients, 5000);
+    let isUpdating = false;
+    let mounted = true;
     
-    // Set longer configuration update interval (every 30 seconds)
-    const configInterval = setInterval(fetchPingConfig, 30000);
+    const updateData = async () => {
+      if (isUpdating || !mounted) return;
+      
+      isUpdating = true;
+      try {
+        await Promise.all([
+          fetchClients(),
+          fetchServerIP()
+        ]);
+      } finally {
+        isUpdating = false;
+      }
+    };
+
+    const updatePingConfig = async () => {
+      if (!mounted) return;
+      await fetchPingConfig();
+    };
+
+    // Initial data fetch
+    updateData();
+    updatePingConfig();
+    
+    // Set up intervals
+    const fastUpdateInterval = setInterval(updateData, 3000);  // 快速更新间隔 (3秒)
+    const slowUpdateInterval = setInterval(updatePingConfig, 30000);  // 慢速更新间隔 (30秒)
 
     return () => {
-      clearInterval(clientsInterval);
-      clearInterval(configInterval);
+      mounted = false;
+      clearInterval(fastUpdateInterval);
+      clearInterval(slowUpdateInterval);
     };
-  }, [fetchClients, fetchPingConfig]);
+  }, [fetchClients, fetchPingConfig, fetchServerIP]);
 
   const addClient = useCallback(async (hostname: string) => {
     if (!hostname.trim()) {
@@ -1195,7 +1286,7 @@ const AdminDashboard: React.FC = () => {
     return <AdminLogin onLoginSuccess={() => setIsAuthenticated(true)} />;
   }
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#1C1C1C]">
         <div className="relative">
