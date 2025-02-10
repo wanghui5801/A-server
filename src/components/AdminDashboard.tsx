@@ -458,6 +458,17 @@ const PingConfigModal = React.memo(({ isOpen, onClose, pingConfigs, onAddConfig,
       return;
     }
 
+    // Check if the target already exists
+    const targetExists = pingConfigs.some(config => 
+      config.target.toLowerCase() === newPingTarget.toLowerCase()
+    );
+
+    if (targetExists) {
+      setError('A configuration with this target already exists');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       await onAddConfig(
         newPingTarget,
@@ -470,8 +481,8 @@ const PingConfigModal = React.memo(({ isOpen, onClose, pingConfigs, onAddConfig,
       setNewPingTarget('');
       setNewPingName('');
       setNewPingDescription('');
-      setNewPingPort('');
-      setNewPingInterval('');
+      setNewPingPort('80');
+      setNewPingInterval('5');
       setError('');
     } catch (err: any) {
       setError(err.message || 'Failed to add ping configuration');

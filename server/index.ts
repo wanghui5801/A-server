@@ -1,4 +1,5 @@
 import express from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import sqlite3 from 'sqlite3';
@@ -9,6 +10,25 @@ import { Client } from 'ssh2';
 import type { ClientChannel } from 'ssh2';
 import bcrypt from 'bcrypt';
 import { setupSSHServer } from './ssh';
+import jwt from 'jsonwebtoken';
+
+// Add type definitions
+interface JwtPayload {
+  isAdmin: boolean;
+  iat?: number;
+  exp?: number;
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: JwtPayload;
+    }
+  }
+}
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const TOKEN_EXPIRY = '24h';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1920,7 +1940,9 @@ app.post('/api/admin/verify-password', async (req, res) => {
     try {
       const match = await bcrypt.compare(password, row.password_hash);
       if (match) {
-        res.json({ success: true });
+        // Generate JWT token
+        const token = jwt.sign({ isAdmin: true }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
+        res.json({ success: true, token });
       } else {
         res.status(401).json({ error: 'Incorrect password' });
       }
@@ -1928,6 +1950,29 @@ app.post('/api/admin/verify-password', async (req, res) => {
       res.status(500).json({ error: 'Password verification failed' });
     }
   });
+});
+
+// Add token verification middleware
+const verifyToken = (req: Request, res: Response, next: NextFunction) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader?.split(' ')[1];
+  
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
+// Add token verification endpoint
+app.post('/api/admin/verify-token', verifyToken, (req, res) => {
+  res.json({ success: true });
 });
 
 // Change password
@@ -2086,8 +2131,17 @@ db.serialize(() => {
   db.run('CREATE INDEX IF NOT EXISTS idx_clients_status ON clients(status)');
 });
 
+// Add type definitions for IP services response
+interface IpifyResponse {
+  ip: string;
+}
+
+interface MyIpResponse {
+  ip: string;
+}
+
 // Add server info endpoint
-app.get('/api/server-info', async (req, res) => {
+app.get('/api/server-info', async (req: Request, res: Response) => {
   try {
     // Check if this is an internal request from AdminDashboard
     const isInternalRequest = req.headers['x-internal-request'] === 'true';
@@ -2137,8 +2191,8 @@ app.get('/api/server-info', async (req, res) => {
       'https://api.myip.com'
     ];
 
-    let publicIP = null;
-    let lastError = null;
+    let publicIP: string | null = null;
+    let lastError: unknown = null;
 
     for (const service of ipServices) {
       try {
@@ -2152,12 +2206,12 @@ app.get('/api/server-info', async (req, res) => {
         const data = await response.text();
         // Handle different response formats
         if (service.includes('ipify')) {
-          const jsonData = JSON.parse(data);
+          const jsonData = JSON.parse(data) as IpifyResponse;
           publicIP = jsonData.ip;
         } else if (service.includes('ip.sb')) {
           publicIP = data.trim();
         } else if (service.includes('myip.com')) {
-          const jsonData = JSON.parse(data);
+          const jsonData = JSON.parse(data) as MyIpResponse;
           publicIP = jsonData.ip;
         }
 
@@ -2178,8 +2232,8 @@ app.get('/api/server-info', async (req, res) => {
     }
 
     // Cache the IP
-    const timestamp = Date.now();
     try {
+      const timestamp = Date.now();
       await new Promise((resolve, reject) => {
         db.run(
           'INSERT OR REPLACE INTO server_info (key, value, updated_at) VALUES (?, ?, ?)',
@@ -2196,10 +2250,10 @@ app.get('/api/server-info', async (req, res) => {
       // Even if caching fails, we can still return the IP
     }
 
-    res.json({ public_ip: publicIP });
+    return res.json({ public_ip: publicIP });
   } catch (error) {
     logger.error('Error in /api/server-info endpoint:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 

@@ -11,26 +11,80 @@ const getApiUrl = () => {
   return window.location.origin;
 };
 
+// Token management functions
+const saveToken = (token: string) => {
+  localStorage.setItem('adminToken', token);
+  localStorage.setItem('tokenTimestamp', Date.now().toString());
+};
+
+const getToken = () => {
+  const token = localStorage.getItem('adminToken');
+  const timestamp = localStorage.getItem('tokenTimestamp');
+  
+  if (!token || !timestamp) return null;
+  
+  // Check if token is expired (24 hours)
+  const now = Date.now();
+  const tokenAge = now - parseInt(timestamp);
+  if (tokenAge > 24 * 60 * 60 * 1000) {
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('tokenTimestamp');
+    return null;
+  }
+  
+  return token;
+};
+
 const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isPasswordSet, setIsPasswordSet] = useState<boolean | null>(null);
+  const [shouldRender, setShouldRender] = useState(true);
 
   useEffect(() => {
-    checkPasswordStatus();
-  }, []);
+    const init = async () => {
+      try {
+        // First check if we have a valid token
+        const token = getToken();
+        if (token) {
+          const response = await fetch(`${getApiUrl()}/api/admin/verify-token`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
 
-  const checkPasswordStatus = async () => {
-    try {
-      const response = await fetch(`${getApiUrl()}/api/admin/password-status`);
-      const data = await response.json();
-      setIsPasswordSet(data.isSet);
-    } catch (err) {
-      setError('Failed to check password status');
-    }
-  };
+          if (response.ok) {
+            setShouldRender(false); // Don't render the component at all
+            onLoginSuccess();
+            return;
+          } else {
+            // If token is invalid, remove it
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('tokenTimestamp');
+          }
+        }
+
+        // Only check password status if no valid token exists
+        const passwordResponse = await fetch(`${getApiUrl()}/api/admin/password-status`);
+        const data = await passwordResponse.json();
+        setIsPasswordSet(data.isSet);
+      } catch (err) {
+        setError('Failed to check authentication status');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    init();
+  }, [onLoginSuccess]);
+
+  // If we shouldn't render (valid token exists), return null
+  if (!shouldRender) {
+    return null;
+  }
 
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +112,8 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
       const data = await response.json();
       if (response.ok) {
         setIsPasswordSet(true);
-        onLoginSuccess();
+        // After setting password, automatically log in
+        await handleLogin(e, password);
       } else {
         setError(data.error || 'Failed to set password');
       }
@@ -69,10 +124,12 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent, passwordOverride?: string) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
+
+    const loginPassword = passwordOverride || password;
 
     try {
       const response = await fetch(`${getApiUrl()}/api/admin/verify-password`, {
@@ -80,11 +137,14 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password: loginPassword }),
       });
 
       const data = await response.json();
-      if (response.ok) {
+      if (response.ok && data.token) {
+        // Save token for auto-login
+        saveToken(data.token);
+        
         // Reset viewport zoom
         const viewport = document.querySelector('meta[name=viewport]');
         if (viewport) {
@@ -103,6 +163,26 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
       setIsLoading(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#1C1C1C] px-4 sm:px-0">
+        <div className="flex flex-col items-center">
+          <div className="relative">
+            <svg className="w-10 sm:w-12 h-10 sm:h-12 loading-spinner text-blue-500/90" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path className="loading-track opacity-20" d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" />
+              <path className="opacity-90" strokeLinecap="round" strokeDasharray="16" strokeDashoffset="16" d="M12 2C6.47715 2 2 6.47715 2 12">
+                <animate attributeName="stroke-dashoffset" values="16;0" dur="0.6s" fill="freeze" />
+              </path>
+            </svg>
+          </div>
+          <div className="mt-4 sm:mt-5 text-gray-300 text-sm sm:text-base font-medium loading-pulse tracking-wide">
+            Checking authentication status...
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isPasswordSet === null) {
     return (

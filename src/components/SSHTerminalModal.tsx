@@ -38,6 +38,13 @@ interface SSHMessage {
   rows?: number;
 }
 
+// 添加保存的登录信息接口
+interface SavedCredentials {
+  username: string;
+  password: string;
+  clientIp: string;
+}
+
 // Update the styles to be more mobile-friendly
 const styles = `
   .terminal-container {
@@ -83,23 +90,115 @@ const styles = `
   }
 `;
 
-const SSHTerminalModal: React.FC<SSHTerminalModalProps> = ({
+const SSHTerminalModal = ({
   isOpen,
   onClose,
   hostname,
   clientIp,
   publicIp,
-}) => {
+}: SSHTerminalModalProps): React.ReactElement | null => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAutoLogging, setIsAutoLogging] = useState(false);
   
   const terminalRef = useRef<HTMLDivElement>(null);
   const terminalInstance = useRef<Terminal | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+
+  // 从服务器加载保存的凭据
+  useEffect(() => {
+    const loadSavedCredentials = async () => {
+      if (isAutoLogging) return; // 防止重复调用
+      
+      try {
+        setIsAutoLogging(true);
+        setError('');
+        console.log('Loading saved credentials for:', clientIp);
+        
+        const response = await fetch(`${getApiUrl()}/api/ssh/credentials/${encodeURIComponent(clientIp)}`);
+        const data = await response.json();
+        
+        if (response.ok && data.username) {
+          console.log('Found saved credentials for username:', data.username);
+          // 直接使用用户名和密码进行自动登录
+          await handleAutoLogin(data.username, data.password);
+        } else {
+          // 没有保存的凭据时静默处理，不显示错误信息
+          console.log('No saved credentials found, waiting for manual login');
+        }
+      } catch (err) {
+        // 出现错误时也静默处理，让用户手动登录
+        console.error('Error loading saved credentials:', err);
+      } finally {
+        setIsAutoLogging(false);
+      }
+    };
+
+    if (isOpen && !isAuthenticated) {
+      loadSavedCredentials();
+    }
+  }, [isOpen, clientIp, isAuthenticated]);
+
+  // 新增自动登录专用函数
+  const handleAutoLogin = async (savedUsername: string, savedPassword: string) => {
+    if (isConnecting) {
+      console.log('Already connecting, skipping...');
+      return;
+    }
+
+    console.log('Attempting auto-login for:', savedUsername);
+    setIsConnecting(true);
+    setError('');
+
+    try {
+      console.log('Sending verify request:', {
+        hostname: clientIp,
+        username: savedUsername,
+        isAutoLogin: true
+      });
+
+      const response = await fetch(`${getApiUrl()}/api/ssh/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          hostname: clientIp,
+          username: savedUsername,
+          password: savedPassword,
+          isAutoLogin: true,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        console.log('Auto-login successful');
+        setUsername(savedUsername);
+        setPassword(savedPassword); // 保存密码用于WebSocket连接
+        setIsAuthenticated(true);
+        setError('');
+      } else {
+        // 自动登录失败时清除状态
+        console.error('Auto-login failed:', data.error);
+        setUsername('');
+        setPassword('');
+        setError('');  // 不显示错误信息，让用户重新输入
+      }
+    } catch (err) {
+      // 自动登录出错时也清除状态
+      console.error('Auto-login error:', err);
+      setUsername('');
+      setPassword('');
+      setError('');
+    } finally {
+      setIsConnecting(false);
+    }
+  };
 
   useEffect(() => {
     // Add styles to head
@@ -279,35 +378,125 @@ const SSHTerminalModal: React.FC<SSHTerminalModalProps> = ({
     return () => {
       document.head.removeChild(styleSheet);
     };
-  }, [isAuthenticated, clientIp, username, password]);
+  }, [isAuthenticated, clientIp]);
 
-  const handleConnect = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  const handleConnect = async (e: React.FormEvent | null, isAutoLogin = false) => {
+    if (e) {
+      e.preventDefault();
+    }
+
+    // 如果是自动登录，不要在这里处理
+    if (isAutoLogin) {
+      console.log('Auto-login should use handleAutoLogin instead');
+      return;
+    }
+
+    // 如果已经在连接中，不要重复连接
+    if (isConnecting) {
+      console.log('Already connecting, skipping...');
+      return;
+    }
+
+    const currentUsername = username.trim();
+    console.log('handleConnect called with:', { currentUsername, isAutoLogin });
+
+    if (!currentUsername) {
+      console.error('Username is empty');
+      setError('Username is required');
+      return;
+    }
+
+    if (!password.trim()) {
+      setError('Password is required');
+      return;
+    }
+
     setIsConnecting(true);
+    setError('');
 
     try {
+      console.log('Sending verify request:', {
+        hostname: clientIp,
+        username: currentUsername,
+        isAutoLogin: false
+      });
+
       const response = await fetch(`${getApiUrl()}/api/ssh/verify`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           hostname: clientIp,
-          username,
-          password,
+          username: currentUsername,
+          password: password.trim(),
+          isAutoLogin: false,
         }),
       });
 
+      const data = await response.json();
+
       if (response.ok) {
+        console.log('Connection successful');
+        
+        // 保存凭据到服务器
+        await fetch(`${getApiUrl()}/api/ssh/credentials`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            clientIp,
+            username: currentUsername,
+            password: password.trim(),
+          }),
+        });
+        
         setIsAuthenticated(true);
+        setError('');
       } else {
-        const data = await response.json();
-        setError(data.error || 'Connection failed');
+        console.error('Connection failed:', data.error);
+        setError(data.error || 'Authentication failed. Please check your credentials.');
+        // 如果服务器指示凭证已被清除，确保清除本地状态
+        if (data.credentialsCleared) {
+          setUsername('');
+          setPassword('');
+        }
       }
     } catch (err) {
-      setError('Connection failed');
+      console.error('Connection error:', err);
+      setError('Connection error. Please try again.');
+      setUsername('');
+      setPassword('');
     } finally {
       setIsConnecting(false);
     }
+  };
+
+  const handleLogout = async () => {
+    // 关闭WebSocket连接
+    if (socketRef.current) {
+      socketRef.current.close();
+    }
+    // 清除终端实例
+    if (terminalInstance.current) {
+      terminalInstance.current.dispose();
+    }
+    
+    try {
+      // 从服务器删除凭据
+      await fetch(`${getApiUrl()}/api/ssh/credentials/${encodeURIComponent(clientIp)}`, {
+        method: 'DELETE',
+      });
+    } catch (err) {
+      console.error('Error removing credentials:', err);
+    }
+
+    // 重置状态
+    setIsAuthenticated(false);
+    setUsername('');
+    setPassword('');
+    setError('');
   };
 
   const handleClose = () => {
@@ -318,8 +507,12 @@ const SSHTerminalModal: React.FC<SSHTerminalModalProps> = ({
       terminalInstance.current.dispose();
     }
     setIsAuthenticated(false);
-    setUsername('');
-    setPassword('');
+    // 只在没有保存的凭据时才清除用户名和密码
+    const savedData = localStorage.getItem('ssh_credentials');
+    if (!savedData) {
+      setUsername('');
+      setPassword('');
+    }
     setError('');
     onClose();
   };
@@ -341,87 +534,103 @@ const SSHTerminalModal: React.FC<SSHTerminalModalProps> = ({
               </div>
             </div>
           </div>
-          <button
-            onClick={handleClose}
-            className="text-gray-400 hover:text-gray-200 transition-colors p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10"
-          >
-            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            {isAuthenticated && (
+              <button
+                onClick={handleLogout}
+                className="text-gray-400 hover:text-gray-200 transition-colors p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10"
+                title="Logout"
+              >
+                <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
+            )}
+            <button
+              onClick={handleClose}
+              className="text-gray-400 hover:text-gray-200 transition-colors p-1.5 sm:p-2 hover:bg-gray-800/50 rounded-lg backdrop-blur-sm border border-gray-800/10"
+              title="Close"
+            >
+              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div className="h-[calc(100%-3.5rem)] flex flex-col overflow-hidden p-2">
           {!isAuthenticated ? (
-            <div className="min-h-full flex items-center justify-center bg-[#1C1C1C] p-4 sm:p-6 animate-fade-in">
-              <div className="w-full max-w-md p-5 sm:p-8 bg-[#252525] rounded-xl shadow-lg animate-fade-in backdrop-blur-sm bg-opacity-95 border border-gray-800/30">
-                <div className="flex items-center justify-center mb-6 animate-slide-down">
-                  <h2 className="text-xl sm:text-2xl font-bold text-gray-100">SSH Connection</h2>
-                </div>
-
-                <form onSubmit={handleConnect} className="space-y-4">
-                  <div className="group">
-                    <div className="relative">
-                      <input
-                        id="username"
-                        type="text"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        placeholder="Username"
-                        className="w-full px-3.5 sm:px-4 py-2.5 bg-[#1C1C1C] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/50 transition-all duration-300 border border-gray-800/50 group-hover:border-gray-700/50 text-sm sm:text-base placeholder-gray-500"
-                        disabled={isConnecting}
-                        autoComplete="off"
-                        spellCheck="false"
-                      />
-                    </div>
+            !isAutoLogging && (
+              <div className="min-h-full flex items-center justify-center bg-[#1C1C1C] p-4 sm:p-6 animate-fade-in">
+                <div className="w-full max-w-md p-5 sm:p-8 bg-[#252525] rounded-xl shadow-lg animate-fade-in backdrop-blur-sm bg-opacity-95 border border-gray-800/30">
+                  <div className="flex items-center justify-center mb-6 animate-slide-down">
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-100">SSH Connection</h2>
                   </div>
 
-                  <div className="group">
-                    <div className="relative">
-                      <input
-                        id="password"
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Password"
-                        className="w-full px-3.5 sm:px-4 py-2.5 bg-[#1C1C1C] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/50 transition-all duration-300 border border-gray-800/50 group-hover:border-gray-700/50 text-sm sm:text-base placeholder-gray-500"
-                        disabled={isConnecting}
-                      />
-                    </div>
-                  </div>
-
-                  {error && (
-                    <div className="text-red-400 text-xs sm:text-sm bg-red-500/10 px-3.5 py-2.5 rounded-lg border border-red-500/20 animate-shake">
-                      <div className="flex items-center space-x-2">
-                        <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span className="font-medium">{error}</span>
+                  <form onSubmit={(e) => handleConnect(e)} className="space-y-4">
+                    <div className="group">
+                      <div className="relative">
+                        <input
+                          id="username"
+                          type="text"
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          placeholder="Username"
+                          className="w-full px-3.5 sm:px-4 py-2.5 bg-[#1C1C1C] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/50 transition-all duration-300 border border-gray-800/50 group-hover:border-gray-700/50 text-sm sm:text-base placeholder-gray-500"
+                          disabled={isConnecting}
+                          autoComplete="off"
+                          spellCheck="false"
+                        />
                       </div>
                     </div>
-                  )}
 
-                  <button
-                    type="submit"
-                    className={`w-full py-2.5 sm:py-3 rounded-lg font-medium transition-all duration-300 text-sm sm:text-base shadow-lg ${
-                      isConnecting
-                        ? 'bg-green-500/70 cursor-not-allowed'
-                        : 'bg-green-500 hover:bg-green-400 hover:shadow-xl active:scale-[0.98]'
-                    }`}
-                    disabled={isConnecting}
-                  >
-                    {isConnecting ? (
-                      <div className="flex items-center justify-center space-x-2">
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                        <span>Connecting...</span>
+                    <div className="group">
+                      <div className="relative">
+                        <input
+                          id="password"
+                          type="password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="Password"
+                          className="w-full px-3.5 sm:px-4 py-2.5 bg-[#1C1C1C] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/50 transition-all duration-300 border border-gray-800/50 group-hover:border-gray-700/50 text-sm sm:text-base placeholder-gray-500"
+                          disabled={isConnecting}
+                        />
                       </div>
-                    ) : (
-                      <span>Connect</span>
+                    </div>
+
+                    {error && (
+                      <div className="text-red-400 text-xs sm:text-sm bg-red-500/10 px-3.5 py-2.5 rounded-lg border border-red-500/20 animate-shake">
+                        <div className="flex items-center space-x-2">
+                          <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="font-medium">{error}</span>
+                        </div>
+                      </div>
                     )}
-                  </button>
-                </form>
+
+                    <button
+                      type="submit"
+                      className={`w-full py-2.5 sm:py-3 rounded-lg font-medium transition-all duration-300 text-sm sm:text-base shadow-lg ${
+                        isConnecting
+                          ? 'bg-green-500/70 cursor-not-allowed'
+                          : 'bg-green-500 hover:bg-green-400 hover:shadow-xl active:scale-[0.98]'
+                      }`}
+                      disabled={isConnecting}
+                    >
+                      {isConnecting ? (
+                        <div className="flex items-center justify-center space-x-2">
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          <span>Connecting...</span>
+                        </div>
+                      ) : (
+                        <span>Connect</span>
+                      )}
+                    </button>
+                  </form>
+                </div>
               </div>
-            </div>
+            )
           ) : (
             <div 
               ref={terminalRef} 
