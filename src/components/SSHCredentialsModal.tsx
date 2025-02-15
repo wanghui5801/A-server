@@ -152,9 +152,9 @@ const SSHCredentialsModal: React.FC<SSHCredentialsModalProps> = ({ isOpen, onClo
 
   return (
     <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-0 transition-all duration-200 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
-      <div className={`bg-[#1C1C1C] rounded-xl w-full max-w-2xl border border-gray-800/20 shadow-2xl transition-all duration-200 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
-        <div className="p-4 sm:p-6">
-          <div className="flex justify-between items-center mb-5 sm:mb-6">
+      <div className={`bg-[#1C1C1C] rounded-xl w-full max-w-2xl border border-gray-800/20 shadow-2xl transition-all duration-200 max-h-[90vh] flex flex-col ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
+        <div className="flex-none p-4 sm:p-6 border-b border-gray-800/20">
+          <div className="flex justify-between items-center">
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-100 hover:text-white transition-colors duration-300">SSH Credentials Management</h2>
             <button
               onClick={handleClose}
@@ -165,7 +165,9 @@ const SSHCredentialsModal: React.FC<SSHCredentialsModalProps> = ({ isOpen, onClo
               </svg>
             </button>
           </div>
+        </div>
 
+        <div className="flex-1 p-4 sm:p-6 overflow-y-auto min-h-0 scrollbar-thin scrollbar-thumb-gray-800 scrollbar-track-transparent">
           {error && (
             <div className="mb-4 text-sm text-red-400 bg-red-400/10 px-4 py-2.5 rounded-lg border border-red-400/20 animate-shake">
               <span className="flex items-center gap-2">
