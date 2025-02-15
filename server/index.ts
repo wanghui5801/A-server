@@ -9,7 +9,7 @@ import cors from 'cors';
 import { Client } from 'ssh2';
 import type { ClientChannel } from 'ssh2';
 import bcrypt from 'bcrypt';
-import { setupSSHServer } from './ssh';
+import { setupSSHServer, registerSSHHostname } from './ssh';
 import jwt from 'jsonwebtoken';
 
 // Add type definitions
@@ -240,6 +240,11 @@ db.serialize(() => {
     // Ignore error if column already exists
     logger.debug('Checked monitored_clients public_ip column');
   });
+
+  db.run(`ALTER TABLE monitored_clients ADD COLUMN client_ip TEXT`, (err) => {
+    // Ignore error if column already exists
+    logger.debug('Checked monitored_clients client_ip column');
+  });
   
   db.run(`CREATE TABLE IF NOT EXISTS monitored_clients (
     hostname TEXT PRIMARY KEY,
@@ -247,12 +252,22 @@ db.serialize(() => {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     sort_order INTEGER DEFAULT 0,
     public_ip TEXT,
-    country_code TEXT
+    client_ip TEXT,
+    country_code TEXT,
+    last_seen DATETIME,
+    UNIQUE(hostname)
   )`, (err) => {
     if (err) {
       logger.error('Error creating monitored_clients table:', err);
     } else {
       logger.info('Monitored clients table ready');
+    }
+  });
+
+  // Add index for faster lookups
+  db.run(`CREATE INDEX IF NOT EXISTS idx_monitored_clients_ip ON monitored_clients(public_ip, client_ip)`, (err) => {
+    if (err && !err.message.includes('already exists')) {
+      logger.error('Error creating monitored_clients index:', err);
     }
   });
 
@@ -437,40 +452,66 @@ function formatNetworkTraffic(value: string): string {
 // Add function to get public IP
 async function getPublicIP(socket: any): Promise<string | null> {
   try {
-    // First try to get IP from ipify API
-    const response = await fetch('https://api.ipify.org?format=json');
-    const data = await response.json();
-    if (data.ip) {
-      return data.ip;
-    }
-  } catch (error) {
-    console.error('Error fetching public IP:', error);
-    
-    // Fallback to existing methods if API call fails
-    // Try x-forwarded-for header
+    // Helper function to clean IP address
+    const cleanIPAddress = (ip: string): string => {
+      // Remove IPv6 prefix if present
+      if (ip.startsWith('::ffff:')) {
+        ip = ip.substring(7);
+      }
+      // Remove port number if present
+      if (ip.includes(':')) {
+        ip = ip.split(':')[0];
+      }
+      return ip;
+    };
+
+    // Try x-forwarded-for header first
     const forwardedFor = socket.handshake.headers['x-forwarded-for'];
     if (forwardedFor) {
-      const ips = forwardedFor.split(',').map((ip: string) => ip.trim());
+      const ips = forwardedFor.split(',').map((ip: string) => cleanIPAddress(ip.trim()));
       const clientIP = ips[0];
       if (clientIP && clientIP !== '::1' && clientIP !== '127.0.0.1') {
+        logger.debug('Got client IP from x-forwarded-for:', clientIP);
         return clientIP;
       }
     }
 
     // Try x-real-ip header
     const realIP = socket.handshake.headers['x-real-ip'];
-    if (realIP && realIP !== '::1' && realIP !== '127.0.0.1') {
-      return realIP;
+    if (realIP) {
+      const cleanedIP = cleanIPAddress(realIP);
+      if (cleanedIP && cleanedIP !== '::1' && cleanedIP !== '127.0.0.1') {
+        logger.debug('Got client IP from x-real-ip:', cleanedIP);
+        return cleanedIP;
+      }
     }
 
-    // Try socket connection
-    const remoteAddress = socket.conn?.remoteAddress || socket.request?.connection?.remoteAddress;
-    if (remoteAddress && remoteAddress !== '::1' && remoteAddress !== '127.0.0.1') {
-      return remoteAddress;
+    // Try socket remote address
+    const remoteAddress = socket.handshake.address;
+    if (remoteAddress) {
+      const cleanedIP = cleanIPAddress(remoteAddress);
+      if (cleanedIP && cleanedIP !== '::1' && cleanedIP !== '127.0.0.1') {
+        logger.debug('Got client IP from socket remote address:', cleanedIP);
+        return cleanedIP;
+      }
     }
+
+    // Try socket connection remote address
+    const connRemoteAddress = socket.conn?.remoteAddress || socket.request?.connection?.remoteAddress;
+    if (connRemoteAddress) {
+      const cleanedIP = cleanIPAddress(connRemoteAddress);
+      if (cleanedIP && cleanedIP !== '::1' && cleanedIP !== '127.0.0.1') {
+        logger.debug('Got client IP from socket connection:', cleanedIP);
+        return cleanedIP;
+      }
+    }
+
+    logger.error('Failed to get client IP from any source');
+    return null;
+  } catch (error) {
+    logger.error('Error getting client IP:', error);
+    return null;
   }
-
-  return null;
 }
 
 // Add function to get country code
@@ -635,6 +676,128 @@ function startSystemInfoTimer() {
   }, 3000);
 }
 
+// Add interface for client registration data
+interface ClientRegistrationData {
+  hostname: string;
+  ip: string;
+  public_ip?: string;
+  cpuModel?: string;
+  cpuThreads?: number;
+  cpuUsage?: number;
+  memoryUsage?: number;
+  diskUsage?: number;
+  uptime?: number;
+  networkTraffic?: {
+    rx: string;
+    tx: string;
+  };
+  memoryTotal?: number;
+  diskTotal?: number;
+}
+
+// Add registerClient function
+async function registerClient(data: ClientRegistrationData, socket: any) {
+  const {
+    hostname,
+    ip,
+    cpuModel,
+    cpuThreads,
+    cpuUsage,
+    memoryUsage,
+    diskUsage,
+    uptime,
+    networkTraffic,
+    memoryTotal,
+    diskTotal
+  } = data;
+
+  // Get public IP
+  const public_ip = await getPublicIP(socket);
+  if (!public_ip) {
+    logger.error('Failed to get public IP for client:', hostname);
+    socket.emit('registration_error', { error: 'Failed to get public IP' });
+    return;
+  }
+
+  const countryCode = public_ip ? await getCountryCode(public_ip) : null;
+
+  // Check if this is a monitored client
+  const monitoredClient = await new Promise((resolve, reject) => {
+    db.get(
+      'SELECT * FROM monitored_clients WHERE hostname = ?',
+      [hostname],
+      (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      }
+    );
+  });
+
+  if (!monitoredClient) {
+    logger.info('Unmonitored client attempted to register:', hostname);
+    socket.emit('registration_error', { error: 'Client not monitored' });
+    return;
+  }
+
+  // Update monitored_clients table with safe update
+  await safeUpdateClient(
+    db,
+    `UPDATE monitored_clients 
+     SET status = ?, 
+         public_ip = ?, 
+         client_ip = ?,
+         country_code = ?,
+         last_seen = CURRENT_TIMESTAMP 
+     WHERE hostname = ?`,
+    ['online', public_ip, ip, countryCode, hostname]
+  );
+
+  // Insert new client data with safe update
+  await safeUpdateClient(
+    db,
+    `INSERT INTO clients (
+      id, hostname, ip, public_ip, country_code, lastSeen,
+      cpuModel, cpuThreads, cpuUsage, memoryUsage, diskUsage,
+      memoryTotal, diskTotal, uptime, networkRx, networkTx, status
+    ) VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      socket.id,
+      hostname,
+      ip,
+      public_ip,
+      countryCode,
+      cpuModel,
+      cpuThreads,
+      cpuUsage,
+      memoryUsage,
+      diskUsage,
+      memoryTotal,
+      diskTotal,
+      uptime,
+      networkTraffic?.rx || 'Unknown',
+      networkTraffic?.tx || 'Unknown',
+      'online'
+    ]
+  );
+
+  // Emit registration success
+  socket.emit('registration_success', {
+    hostname,
+    ip,
+    public_ip,
+    countryCode,
+    cpuModel,
+    cpuThreads,
+    cpuUsage,
+    memoryUsage,
+    diskUsage,
+    memoryTotal,
+    diskTotal,
+    uptime,
+    networkTraffic
+  });
+}
+
 // Modify socket connection handling
 io.on('connection', (socket) => {
   logger.info('Client connected:', socket.id);
@@ -642,84 +805,44 @@ io.on('connection', (socket) => {
   let sshStream: ClientChannel | null = null;
 
   // Client registration
-  socket.on('register', async (data) => {
-    const { hostname, ip, public_ip, cpuModel, cpuThreads, cpuUsage, memoryUsage, diskUsage, uptime, networkTraffic, memoryTotal, diskTotal } = data;
-    
+  socket.on('register', async (data: ClientRegistrationData) => {
     try {
-      // Prioritize client-provided public IP, otherwise try to get it
-      const publicIP = public_ip || await getPublicIP(socket);
-      const countryCode = publicIP ? await getCountryCode(publicIP) : null;
+      logger.info(`Client ${data.hostname} attempting to register`);
       
-      logger.debug(`Client ${hostname} registration details:`, {
-        socketId: socket.id,
-        reportedIP: ip,
-        publicIP,
-        countryCode
-      });
-
-      // Check if this is a monitored client
-      const monitoredClient = await new Promise((resolve, reject) => {
-        db.get(
-          'SELECT * FROM monitored_clients WHERE hostname = ?',
-          [hostname],
-          (err, row) => {
-            if (err) reject(err);
-            else resolve(row);
-          }
-        );
-      });
-
-      if (!monitoredClient) {
-        logger.info('Unmonitored client attempted to register:', hostname);
+      // Get the client's IP addresses
+      const clientIp = data.ip;
+      const publicIp = await getPublicIP(socket);
+      
+      if (!publicIp) {
+        logger.error('Failed to get public IP for client:', data.hostname);
+        socket.emit('registration_error', { error: 'Failed to get public IP' });
         return;
       }
 
-      // Update monitored_clients table with safe update
-      await safeUpdateClient(
-        db,
-        'UPDATE monitored_clients SET status = ?, public_ip = ?, country_code = ? WHERE hostname = ?',
-        ['online', publicIP, countryCode, hostname]
-      );
-
-      // Insert new client data with safe update
-      await safeUpdateClient(
-        db,
-        `INSERT INTO clients (
-          id, hostname, ip, public_ip, country_code, lastSeen,
-          cpuModel, cpuThreads, cpuUsage, memoryUsage, diskUsage,
-          memoryTotal, diskTotal, uptime, networkRx, networkTx, status
-        ) VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          socket.id,
-          hostname,
-          ip,
-          publicIP,
-          countryCode,
-          cpuModel,
-          cpuThreads,
-          cpuUsage,
-          memoryUsage,
-          diskUsage,
-          memoryTotal,
-          diskTotal,
-          uptime,
-          networkTraffic?.rx || 'Unknown',
-          networkTraffic?.tx || 'Unknown',
-          'online'
-        ]
-      );
-
-      logger.info(`Client ${hostname} registered with socket ID: ${socket.id}`);
+      // Register the client
+      await registerClient(data, socket);
       
-      // Send registration success message
-      socket.emit('registerSuccess');
+      // Modify SSH registration logic to avoid duplicates
+      const remoteIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+      // Prioritize using public IP for SSH registration
+      let sshRegistered = await registerSSHHostname(remoteIp as string);
       
-      // Send ping targets only once after successful registration
+      // Only try client IP registration if client IP differs from public IP and public IP registration fails
+      if (!sshRegistered && clientIp !== remoteIp) {
+        sshRegistered = await registerSSHHostname(clientIp);
+      }
+      
+      if (!sshRegistered) {
+        logger.warn(`Failed to register SSH for client: ${data.hostname}`);
+      }
+      
+      logger.info(`Client ${data.hostname} registered successfully with socket ID: ${socket.id}`);
+      
+      // Send initial ping targets
       await sendPingTargetsToClient(socket);
-
     } catch (error) {
       logger.error('Error during client registration:', error);
-      socket.emit('registrationError', { message: 'Registration failed' });
+      socket.emit('registration_error', { error: 'Registration failed' });
     }
   });
 

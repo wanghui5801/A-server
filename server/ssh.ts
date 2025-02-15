@@ -1,7 +1,7 @@
 import { WebSocket, WebSocketServer } from 'ws';
 import { Client } from 'ssh2';
 import type { ConnectConfig } from 'ssh2';
-import type { Express, Request } from 'express';
+import type { Express, Request, Response, NextFunction } from 'express';
 import { URL } from 'url';
 import type { Socket } from 'net';
 import type { Server } from 'http';
@@ -21,19 +21,31 @@ const db = new sqlite3.Database(join(__dirname, 'monitor.db'), (err) => {
   }
 });
 
-// Create SSH credentials table
+// Create SSH credentials table with proper schema migration
 db.serialize(() => {
+  // First create the basic table if it doesn't exist
   db.run(`CREATE TABLE IF NOT EXISTS ssh_credentials (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     client_ip TEXT NOT NULL,
-    username TEXT NOT NULL,
-    password_hash TEXT NOT NULL,
-    password TEXT,
+    username TEXT DEFAULT '',
+    password_hash TEXT DEFAULT '',
+    password TEXT DEFAULT '',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_used DATETIME,
     UNIQUE(client_ip)
   )`, (err) => {
     if (err) {
       console.error('Error creating ssh_credentials table:', err);
+    } else {
+      logger.info('SSH credentials table created or verified');
+    }
+  });
+
+  // Add index for faster lookups if it doesn't exist
+  db.run(`CREATE INDEX IF NOT EXISTS idx_ssh_credentials_client_ip ON ssh_credentials(client_ip)`, (err) => {
+    if (err && !err.message.includes('already exists')) {
+      console.error('Error creating index:', err);
     }
   });
 });
@@ -69,27 +81,168 @@ interface SSHConfig {
   password: string;
 }
 
+// Modify SSH hostname registration function
+export const registerSSHHostname = async (clientIp: string) => {
+  try {
+    logger.debug('Attempting to register SSH hostname for client:', clientIp);
+
+    // First check if there is a connected client
+    const clientExists = await new Promise<boolean>((resolve, reject) => {
+      db.get(
+        'SELECT hostname FROM monitored_clients WHERE (public_ip = ? OR client_ip = ?) AND status = ?',
+        [clientIp, clientIp, 'online'],
+        (err, row) => {
+          if (err) {
+            logger.error('Error checking client existence:', err);
+            reject(err);
+          } else {
+            resolve(!!row);
+          }
+        }
+      );
+    });
+
+    if (!clientExists) {
+      logger.warn('Cannot register SSH for non-connected client:', clientIp);
+      return false;
+    }
+
+    // Check if SSH credentials already exist
+    const existing = await new Promise<any>((resolve, reject) => {
+      db.get('SELECT id FROM ssh_credentials WHERE client_ip = ?', [clientIp], (err, row) => {
+        if (err) {
+          logger.error('Error checking existing SSH credentials:', err);
+          reject(err);
+        } else {
+          resolve(row);
+        }
+      });
+    });
+
+    if (!existing) {
+      // Only insert new record if it doesn't exist
+      await new Promise<void>((resolve, reject) => {
+        db.run(
+          `INSERT INTO ssh_credentials 
+           (client_ip, username, password_hash, password, created_at, updated_at) 
+           VALUES (?, '', '', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+          [clientIp],
+          function(err) {
+            if (err) {
+              logger.error('Error inserting SSH credentials:', err);
+              reject(err);
+            } else {
+              logger.info('Successfully registered new SSH credentials for client:', clientIp);
+              resolve();
+            }
+          }
+        );
+      });
+      return true;
+    }
+    
+    logger.debug('SSH credentials already exist for client:', clientIp);
+    return true;
+  } catch (err) {
+    logger.error('Error in registerSSHHostname:', err);
+    return false;
+  }
+};
+
+// Modify save SSH credentials function
+export const saveSSHCredentials = async (clientIp: string, username: string, password: string) => {
+  try {
+    const passwordHash = await bcrypt.hash(password, 10);
+    await new Promise<void>((resolve, reject) => {
+      db.run(
+        `INSERT OR REPLACE INTO ssh_credentials 
+         (client_ip, username, password_hash, password, updated_at) 
+         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+        [clientIp, username, passwordHash, password],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+    return true;
+  } catch (err) {
+    logger.error('Error saving SSH credentials:', err);
+    return false;
+  }
+};
+
+// Add internal request verification middleware
+const verifyLocalRequest = (req: Request, res: Response, next: NextFunction) => {
+  const clientIp = req.ip || req.socket.remoteAddress;
+  const isLocalRequest = clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === '::ffff:127.0.0.1';
+  
+  if (!isLocalRequest) {
+    logger.warn('Unauthorized access attempt to internal API:', {
+      ip: clientIp,
+      path: req.path
+    });
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  next();
+};
+
 export const setupSSHServer = (app: Express) => {
-  // 获取保存的SSH凭证
-  app.get('/api/ssh/credentials/:clientIp', async (req, res) => {
+  // Get saved SSH credentials - add local validation middleware
+  app.get('/api/ssh/credentials/:clientIp', verifyLocalRequest, async (req, res) => {
     const { clientIp } = req.params;
     
     try {
-      const credentials = await new Promise<any>((resolve, reject) => {
-        db.get('SELECT username, password FROM ssh_credentials WHERE client_ip = ?', [clientIp], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
+      // Check if client exists (without checking online status)
+      const clientExists = await new Promise((resolve, reject) => {
+        db.get(
+          'SELECT hostname FROM monitored_clients WHERE (public_ip = ? OR client_ip = ?)',
+          [clientIp, clientIp],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(!!row);
+          }
+        );
       });
 
-      if (credentials) {
-        // 返回用户名和原始密码
-        res.json({ 
-          username: credentials.username,
-          password: credentials.password // 返回原始密码用于SSH连接
+      if (!clientExists) {
+        return res.status(404).json({
+          error: 'Client not found',
+          code: 'CLIENT_NOT_FOUND'
         });
+      }
+
+      const credentials = await new Promise<any>((resolve, reject) => {
+        db.get(
+          'SELECT username, password FROM ssh_credentials WHERE client_ip = ?', 
+          [clientIp], 
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
+
+      if (credentials && credentials.username) {
+        // Update last used time
+        await new Promise<void>((resolve, reject) => {
+          db.run(
+            'UPDATE ssh_credentials SET last_used = CURRENT_TIMESTAMP WHERE client_ip = ?',
+            [clientIp],
+            (err) => {
+              if (err) reject(err);
+              else resolve();
+            }
+          );
+        });
+
+        res.json(credentials);
       } else {
-        res.status(404).json({ error: 'No saved credentials found' });
+        // If no credentials found, return error
+        res.status(404).json({ 
+          error: 'No saved credentials found',
+          code: 'NO_CREDENTIALS'
+        });
       }
     } catch (err) {
       logger.error('Error retrieving SSH credentials:', err);
@@ -97,34 +250,55 @@ export const setupSSHServer = (app: Express) => {
     }
   });
 
-  // 保存SSH凭证
-  app.post('/api/ssh/credentials', async (req, res) => {
+  // Save SSH credentials - add local validation middleware
+  app.post('/api/ssh/credentials', verifyLocalRequest, async (req, res) => {
     const { clientIp, username, password } = req.body;
     
+    if (!clientIp || !username || !password) {
+      return res.status(400).json({ 
+        error: 'Missing required fields',
+        code: 'INVALID_REQUEST'
+      });
+    }
+
     try {
-      // 保存原始密码和哈希
-      const passwordHash = await bcrypt.hash(password, 10);
-      
-      await new Promise<void>((resolve, reject) => {
-        db.run(
-          'INSERT OR REPLACE INTO ssh_credentials (client_ip, username, password_hash, password) VALUES (?, ?, ?, ?)',
-          [clientIp, username, passwordHash, password],
-          (err) => {
+      // First check if client exists and is online
+      const clientExists = await new Promise((resolve, reject) => {
+        db.get(
+          'SELECT hostname FROM monitored_clients WHERE (public_ip = ? OR client_ip = ?) AND status = ?',
+          [clientIp, clientIp, 'online'],
+          (err, row) => {
             if (err) reject(err);
-            else resolve();
+            else resolve(!!row);
           }
         );
       });
 
-      res.json({ success: true });
+      if (!clientExists) {
+        return res.status(404).json({
+          error: 'Client not found or not online',
+          code: 'CLIENT_NOT_FOUND'
+        });
+      }
+
+      // Save or update credentials
+      const success = await saveSSHCredentials(clientIp, username, password);
+      if (success) {
+        res.json({ success: true });
+      } else {
+        res.status(500).json({ 
+          error: 'Failed to save credentials',
+          code: 'SAVE_FAILED'
+        });
+      }
     } catch (err) {
       logger.error('Error saving SSH credentials:', err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
 
-  // 删除SSH凭证
-  app.delete('/api/ssh/credentials/:clientIp', async (req, res) => {
+  // Delete SSH credentials - add local validation middleware
+  app.delete('/api/ssh/credentials/:clientIp', verifyLocalRequest, async (req, res) => {
     const { clientIp } = req.params;
     
     try {
@@ -142,32 +316,22 @@ export const setupSSHServer = (app: Express) => {
     }
   });
 
-  // 修改数据库表结构
-  db.run(`ALTER TABLE ssh_credentials ADD COLUMN password TEXT`, (err) => {
-    if (err && !err.message.includes('duplicate')) {
-      console.error('Error adding password column:', err);
-    }
-  });
-
   // Verify SSH credentials endpoint
   app.post('/api/ssh/verify', async (req, res) => {
     const { hostname, username, password, isAutoLogin } = req.body;
     logger.debug('Verify request received:', { hostname, username, isAutoLogin });
 
-    if (!username) {
-      logger.error('Username is required');
-      return res.status(400).json({ error: 'Username is required' });
-    }
-
-    const ssh = new Client();
-    
     try {
-      // 从数据库获取保存的凭证
+      // Get saved credentials from database
       const savedCredentials = await new Promise<any>((resolve, reject) => {
-        db.get('SELECT username, password_hash, password FROM ssh_credentials WHERE client_ip = ?', [hostname], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
+        db.get(
+          'SELECT username, password_hash, password FROM ssh_credentials WHERE client_ip = ?', 
+          [hostname], 
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
       });
 
       logger.debug('Database query result:', { 
@@ -175,22 +339,36 @@ export const setupSSHServer = (app: Express) => {
         savedUsername: savedCredentials?.username
       });
 
+      // If no saved credentials or username is empty, return error
+      if (!savedCredentials || !savedCredentials.username) {
+        logger.error('No SSH credentials set');
+        return res.status(401).json({ 
+          error: 'SSH credentials not set',
+          code: 'NO_CREDENTIALS'
+        });
+      }
+
       let finalPassword = '';
       
       if (isAutoLogin) {
-        // 自动登录：必须有保存的凭证且用户名匹配
-        if (!savedCredentials || savedCredentials.username !== username) {
-          logger.error('No matching saved credentials found for auto-login');
-          throw new Error('No matching saved credentials found');
+        // Auto login: must have saved credentials and username match
+        if (savedCredentials.username !== username) {
+          logger.error('Username mismatch for auto-login');
+          return res.status(401).json({ 
+            error: 'Invalid credentials',
+            code: 'INVALID_CREDENTIALS'
+          });
         }
-        // 使用保存的原始密码
         finalPassword = savedCredentials.password;
         logger.debug('Using saved password for auto-login');
       } else {
-        // 手动登录：使用提供的密码
+        // Manual login: use provided password
         if (!password) {
           logger.error('Password is required for manual login');
-          throw new Error('Password is required');
+          return res.status(400).json({ 
+            error: 'Password is required',
+            code: 'PASSWORD_REQUIRED'
+          });
         }
         finalPassword = password;
       }
@@ -201,7 +379,7 @@ export const setupSSHServer = (app: Express) => {
         isAutoLogin
       });
 
-      // 尝试SSH连接
+      // Try SSH connection
       await new Promise((resolve, reject) => {
         const sshConfig: ConnectConfig = {
           host: hostname,
@@ -233,47 +411,40 @@ export const setupSSHServer = (app: Express) => {
           }
         };
 
+        const ssh = new Client();
         ssh.on('ready', () => {
           logger.debug('SSH connection successful');
           ssh.end();
           resolve(true);
         }).on('error', async (err) => {
           logger.error('SSH connection error:', err);
-          // 如果是自动登录失败，删除保存的凭证
-          if (isAutoLogin) {
-            try {
-              await new Promise<void>((resolve, reject) => {
-                db.run('DELETE FROM ssh_credentials WHERE client_ip = ?', [hostname], (err) => {
-                  if (err) reject(err);
-                  else resolve();
-                });
-              });
-              logger.debug('Removed invalid saved credentials');
-            } catch (deleteErr) {
-              logger.error('Error removing invalid credentials:', deleteErr);
-            }
-          }
-          reject(err);
+          reject(new Error('Authentication failed. Please check your credentials.'));
         }).connect(sshConfig);
       });
 
-      // 如果连接成功，返回原始密码以供WebSocket使用
+      // Update last used time
+      await new Promise<void>((resolve, reject) => {
+        db.run(
+          'UPDATE ssh_credentials SET last_used = CURRENT_TIMESTAMP WHERE client_ip = ?',
+          [hostname],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+
+      // If connection successful, return original password for WebSocket use
       res.json({ 
         success: true,
-        password: finalPassword // 返回用于WebSocket连接的密码
+        password: finalPassword
       });
-    } catch (err) {
-      logger.error('SSH verification error:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Authentication failed';
-      // 如果验证失败，在响应中添加一个标志
+    } catch (err: any) {
+      logger.error('Error during SSH verification:', err);
       res.status(401).json({ 
-        error: errorMessage,
-        credentialsCleared: isAutoLogin // 告诉客户端凭证已被清除
+        error: err.message || 'Authentication failed. Please check your credentials.',
+        code: 'AUTH_FAILED'
       });
-    } finally {
-      if (ssh) {
-        ssh.end();
-      }
     }
   });
 
@@ -308,6 +479,88 @@ export const setupSSHServer = (app: Express) => {
 
         handleSSHConnection(ws, sshConfig);
       });
+    }
+  });
+
+  // Get all SSH credentials - add local validation middleware
+  app.get('/api/ssh/all-credentials', verifyLocalRequest, async (req, res) => {
+    try {
+      // Modify query to avoid duplicate records, without checking online status
+      const credentials = await new Promise<any[]>((resolve, reject) => {
+        db.all(
+          `SELECT DISTINCT 
+             mc.hostname,
+             mc.status,
+             mc.sort_order,
+             mc.created_at,
+             COALESCE(
+               (SELECT client_ip FROM ssh_credentials 
+                WHERE client_ip = mc.public_ip),
+               (SELECT client_ip FROM ssh_credentials 
+                WHERE client_ip = mc.client_ip),
+               mc.public_ip,
+               mc.client_ip
+             ) as client_ip,
+             (SELECT username FROM ssh_credentials 
+              WHERE client_ip = mc.public_ip 
+              OR client_ip = mc.client_ip 
+              LIMIT 1) as username,
+             (SELECT password FROM ssh_credentials 
+              WHERE client_ip = mc.public_ip 
+              OR client_ip = mc.client_ip 
+              LIMIT 1) as password
+           FROM monitored_clients mc
+           WHERE mc.hostname IS NOT NULL
+           AND (
+             EXISTS (
+               SELECT 1 FROM ssh_credentials sc 
+               WHERE sc.client_ip = mc.public_ip 
+               OR sc.client_ip = mc.client_ip
+             )
+           )
+           ORDER BY mc.sort_order DESC, mc.created_at ASC`,
+          [],
+          (err, rows) => {
+            if (err) {
+              logger.error('Database query error:', err);
+              reject(err);
+            } else {
+              resolve(rows);
+            }
+          }
+        );
+      });
+
+      res.json(credentials);
+    } catch (err) {
+      logger.error('Error retrieving all SSH credentials:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // Add endpoint to update SSH credentials
+  app.put('/api/ssh/credentials/:clientIp', async (req, res) => {
+    const { clientIp } = req.params;
+    const { username, password } = req.body;
+    
+    try {
+      const passwordHash = await bcrypt.hash(password, 10);
+      
+      await new Promise<void>((resolve, reject) => {
+        db.run(
+          'UPDATE ssh_credentials SET username = ?, password_hash = ?, password = ? WHERE client_ip = ?',
+          [username, passwordHash, password, clientIp],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+
+      res.json({ success: true });
+    } catch (err) {
+      logger.error('Error updating SSH credentials:', err);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 };

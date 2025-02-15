@@ -132,15 +132,15 @@ if (args.length < 2) {
 export const execAsync = promisify(exec);
 
 // Update socket connection to use provided server address
-const socket = socketIOClient(`ws://${serverAddress}`, {
-  transports: ['websocket'],
+const socket = socketIOClient(`http://${serverAddress}`, {
+  transports: ['websocket', 'polling'],
   autoConnect: true,
   reconnection: true,
   reconnectionAttempts: Infinity,
   reconnectionDelay: 1000,
   timeout: 20000,
-  forceNew: false,
-  multiplex: true
+  forceNew: true,
+  path: '/socket.io'
 });
 
 // Store current ping schedules
@@ -211,7 +211,7 @@ async function getCpuUsage(): Promise<number> {
     if (!lastCpuInfo) {
       lastCpuInfo = current;
       // Use precise time interval
-      const PRECISE_INTERVAL = 1000; // 精确的1秒
+      const PRECISE_INTERVAL = 1000; // Precise 1 second interval
       await new Promise(resolve => setTimeout(resolve, PRECISE_INTERVAL));
       return getCpuUsage();
     }
@@ -295,7 +295,7 @@ async function getMemoryUsage(): Promise<number> {
     let used: number;
     let usagePercentage: number;
 
-    // 优先使用 MemAvailable 计算（Linux 3.14+ 内核支持）
+    // Prioritize using MemAvailable calculation (Linux 3.14+ kernel support)
     if ('MemAvailable' in memInfo && memInfo['MemAvailable'] > 0) {
       used = total - memInfo['MemAvailable'];
       usagePercentage = (used / total) * 100;
@@ -307,7 +307,7 @@ async function getMemoryUsage(): Promise<number> {
         percentage: `${usagePercentage.toFixed(2)}%`
       });
     } else {
-      // 回退到传统计算方法
+      // Fallback to traditional calculation method
       const free = memInfo['MemFree'];
       const buffers = memInfo['Buffers'];
       const cached = memInfo['Cached'];
@@ -356,12 +356,12 @@ interface DiskUsageInfo {
 
 async function getDiskUsage(): Promise<number> {
   try {
-    // 获取磁盘空间使用情况
+    // Get disk space usage
     const { stdout } = await execAsync(
       'df -Pl | grep -vE "^(tmpfs|devtmpfs|udev|none|overlay|shm|snap|squashfs|rootfs|/dev/loop)"'
     );
     
-    // 获取inode使用情况
+    // Get inode usage
     const { stdout: inodeStdout } = await execAsync(
       'df -iPl | grep -vE "^(tmpfs|devtmpfs|udev|none|overlay|shm|snap|squashfs|rootfs|/dev/loop)"'
     ).catch(err => {
@@ -383,7 +383,7 @@ async function getDiskUsage(): Promise<number> {
     let usedInodes = 0;
     const mountPoints: string[] = [];
 
-    // 处理磁盘空间使用情况
+    // Process disk space usage
     lines.slice(1).forEach(line => {
       const parts = line.trim().split(/\s+/);
       if (parts.length < 6) {
@@ -410,7 +410,7 @@ async function getDiskUsage(): Promise<number> {
       mountPoints.push(mountPoint);
     });
 
-    // 处理inode使用情况
+    // Process inode usage
     if (inodeLines.length > 1) {
       inodeLines.slice(1).forEach(line => {
         const parts = line.trim().split(/\s+/);
@@ -434,7 +434,7 @@ async function getDiskUsage(): Promise<number> {
     const spaceUsagePercentage = (totalUsed / totalSize) * 100;
     const inodeUsagePercentage = totalInodes > 0 ? (usedInodes / totalInodes) * 100 : 0;
 
-    // 使用空间使用率和inode使用率的较大值
+    // Use both space usage and inode usage rates
     const finalUsage = Math.max(spaceUsagePercentage, inodeUsagePercentage);
     
     log.debug('Disk usage calculation:', {
@@ -531,7 +531,7 @@ async function getNetworkTraffic(): Promise<{ rx: string; tx: string }> {
 // Get total disk size
 async function getDiskTotal(): Promise<number> {
   try {
-    // 使用与 getDiskUsage 相同的命令和过滤条件
+    // Use the same commands and filters as getDiskUsage
     const { stdout } = await execAsync(
       'df -Pl | grep -vE "^(tmpfs|devtmpfs|udev|none|overlay|shm|snap|squashfs|rootfs|/dev/loop)"'
     );
@@ -545,7 +545,7 @@ async function getDiskTotal(): Promise<number> {
     let totalSize = 0;
     const filesystems: string[] = [];
     
-    // 跳过标题行
+    // Skip header line
     lines.slice(1).forEach(line => {
       const parts = line.trim().split(/\s+/);
       if (parts.length < 6) {
@@ -554,7 +554,7 @@ async function getDiskTotal(): Promise<number> {
       }
 
       const filesystem = parts[0];
-      const size = parseInt(parts[1]); // 总大小(1K-blocks)
+      const size = parseInt(parts[1]); // Total size (1K-blocks)
       
       if (!isNaN(size) && size > 0) {
         totalSize += size;
@@ -564,10 +564,10 @@ async function getDiskTotal(): Promise<number> {
       }
     });
     
-    // 转换为字节(1K-blocks * 1024)
+    // Convert to bytes (1K-blocks * 1024)
     const totalBytes = totalSize * 1024;
     
-    // 记录详细信息
+    // Record detailed information
     log.debug('Disk total calculation:', {
       totalSize: `${totalSize} KB`,
       totalBytes: `${totalBytes} bytes`,
@@ -963,7 +963,7 @@ function scheduleNextPing(schedule: PingSchedule) {
 
   schedule.timer = setTimeout(async () => {
     await executePingWithTiming(schedule);
-    // 只有当调度仍然存在时才继续
+    // Continue only if the schedule still exists
     if (pingSchedules.includes(schedule)) {
       schedule.nextPingTime = Date.now() + schedule.interval;
       scheduleNextPing(schedule);

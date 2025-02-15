@@ -287,7 +287,7 @@ const DetailModal: React.FC<DetailModalProps> = React.memo(({ client, onClose, p
     setChartData({ datasets });
   }, [localClient.ping_history, pingConfigs, selectedTarget, getColorForTarget, getBackgroundColorForTarget]);
 
-  // 添加获取丢包率颜色的函数
+  // Add function to get packet loss rate color
   const getLossRateColor = useCallback((lossRate: number) => {
     if (lossRate >= 50) return 'bg-red-500/90 shadow-sm shadow-red-500/20 hover:shadow-red-500/30 hover:bg-red-500/80 text-white';
     if (lossRate >= 20) return 'bg-orange-500/90 shadow-sm shadow-orange-500/20 hover:shadow-orange-500/30 hover:bg-orange-500/80 text-white';

@@ -3,6 +3,7 @@ import AdminLogin from './AdminLogin';
 import SSHTerminalModal from './SSHTerminalModal';
 import '../styles/animations.css';
 import socketIOClient from 'socket.io-client';
+import SSHCredentialsModal from './SSHCredentialsModal';
 
 interface MonitoredClient {
   hostname: string;
@@ -794,6 +795,7 @@ const AdminDashboard: React.FC = () => {
   // Add new state for sort order input
   const [sortInputs, setSortInputs] = useState<{[key: string]: number}>({});
   const [updateSortTimeout, setUpdateSortTimeout] = useState<{[key: string]: NodeJS.Timeout}>({});
+  const [isSSHCredentialsModalOpen, setIsSSHCredentialsModalOpen] = useState(false);
 
   const fetchClients = useCallback(async () => {
     try {
@@ -874,7 +876,7 @@ const AdminDashboard: React.FC = () => {
         console.log('Socket connected successfully');
         setConnected(true);
         setError('');
-        // 移除这里的重复调用，因为这些数据会通过定时器自动更新
+        // Remove duplicate calls here since data will be automatically updated by timers
       };
 
       const handleDisconnect = (reason: string) => {
@@ -911,9 +913,9 @@ const AdminDashboard: React.FC = () => {
     };
 
     return handleSocketEvents();
-  }, []);  // 移除不必要的依赖
+  }, []); // Remove unnecessary dependencies
 
-  // 合并所有数据获取定时器到一个 useEffect 中
+  // Merge all data fetching timers into a single useEffect
   useEffect(() => {
     let isUpdating = false;
     let mounted = true;
@@ -942,8 +944,8 @@ const AdminDashboard: React.FC = () => {
     updatePingConfig();
     
     // Set up intervals
-    const fastUpdateInterval = setInterval(updateData, 3000);  // 快速更新间隔 (3秒)
-    const slowUpdateInterval = setInterval(updatePingConfig, 30000);  // 慢速更新间隔 (30秒)
+    const fastUpdateInterval = setInterval(updateData, 3000);  // Fast update interval (3 seconds)
+    const slowUpdateInterval = setInterval(updatePingConfig, 30000);  // Slow update interval (30 seconds)
 
     return () => {
       mounted = false;
@@ -1331,25 +1333,31 @@ const AdminDashboard: React.FC = () => {
                   <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 transition-transform duration-300 group-hover:rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                   </svg>
-                  <span className="relative">Back to Home</span>
+                  <span className="relative">Home</span>
                 </a>
                 <button
                   onClick={() => setIsChangePasswordModalOpen(true)}
                   className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-yellow-500/90 text-white rounded-lg hover:bg-yellow-400/90 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg active:scale-95 text-sm sm:text-base font-medium tracking-wide border border-yellow-400/10 backdrop-blur-sm"
                 >
-                  Change Password
+                  Security
                 </button>
                 <button
                   onClick={() => setIsAddClientModalOpen(true)}
                   className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-green-500/90 text-white rounded-lg hover:bg-green-400/90 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg active:scale-95 text-sm sm:text-base font-medium tracking-wide border border-green-400/10 backdrop-blur-sm"
                 >
-                  Add Client
+                  Client
                 </button>
                 <button
                   onClick={() => setIsPingConfigModalOpen(true)}
                   className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-blue-500/90 text-white rounded-lg hover:bg-blue-400/90 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg active:scale-95 text-sm sm:text-base font-medium tracking-wide border border-blue-400/10 backdrop-blur-sm"
                 >
-                  Ping Config
+                  Ping
+                </button>
+                <button
+                  onClick={() => setIsSSHCredentialsModalOpen(true)}
+                  className="hidden sm:flex items-center px-3.5 sm:px-4 py-2 sm:py-2.5 bg-purple-500/90 text-white rounded-lg hover:bg-purple-400/90 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg active:scale-95 text-sm sm:text-base font-medium tracking-wide border border-purple-400/10 backdrop-blur-sm"
+                >
+                  SSH Keys
                 </button>
               </div>
             </div>
@@ -1684,8 +1692,13 @@ const AdminDashboard: React.FC = () => {
           clientIp={selectedSSHClient.ip}
         />
       )}
+
+      <SSHCredentialsModal
+        isOpen={isSSHCredentialsModalOpen}
+        onClose={() => setIsSSHCredentialsModalOpen(false)}
+      />
     </div>
   );
 }
 
-export default React.memo(AdminDashboard); 
+export default React.memo(AdminDashboard);
