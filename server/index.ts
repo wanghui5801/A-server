@@ -661,19 +661,31 @@ async function sendPingTargetsToClient(socket: any) {
   }
 }
 
-// Add a single timer for system info updates
+// Global system info timer
 let systemInfoTimer: NodeJS.Timeout | null = null;
 
 function startSystemInfoTimer() {
   // Clear existing timer if any
   if (systemInfoTimer) {
     clearInterval(systemInfoTimer);
+    systemInfoTimer = null;
   }
 
   // Create new timer
   systemInfoTimer = setInterval(() => {
-    broadcastSystemInfoRequest();
+    // Only broadcast if there are connected clients
+    if (io.engine.clientsCount > 0) {
+      broadcastSystemInfoRequest();
+    } else {
+      // Stop timer if no clients are connected
+      if (systemInfoTimer) {
+        clearInterval(systemInfoTimer);
+        systemInfoTimer = null;
+      }
+    }
   }, 3000);
+
+  console.log('System info timer started');
 }
 
 // Add interface for client registration data
@@ -803,6 +815,11 @@ io.on('connection', (socket) => {
   logger.info('Client connected:', socket.id);
   let sshClient: Client | null = null;
   let sshStream: ClientChannel | null = null;
+
+  // Start system info timer if not already running
+  if (!systemInfoTimer) {
+    startSystemInfoTimer();
+  }
 
   // Client registration
   socket.on('register', async (data: ClientRegistrationData) => {
@@ -2433,8 +2450,12 @@ app.post('/api/service-name', async (req, res) => {
 
 // Add broadcast system info request function
 function broadcastSystemInfoRequest() {
-  io.emit('requestSystemInfo');
-  logger.debug('Broadcasted system info request to all clients');
+  try {
+    // 只向已连接的客户端广播请求
+    io.emit('requestSystemInfo');
+  } catch (error) {
+    logger.error('Error broadcasting system info request:', error);
+  }
 }
 
 // Add endpoint for frontend to trigger system info update
@@ -2447,6 +2468,7 @@ app.post('/api/request-system-info', (req, res) => {
 process.on('SIGTERM', () => {
   if (systemInfoTimer) {
     clearInterval(systemInfoTimer);
+    systemInfoTimer = null;
   }
   // ... existing shutdown code ...
 });
@@ -2454,6 +2476,7 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   if (systemInfoTimer) {
     clearInterval(systemInfoTimer);
+    systemInfoTimer = null;
   }
   // ... existing shutdown code ...
 });

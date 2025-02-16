@@ -261,7 +261,6 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [pingConfigs, setPingConfigs] = useState<PingConfig[]>([]);
-  const [lastUpdate, setLastUpdate] = useState<number>(Date.now());
   const [isLoading, setIsLoading] = useState(false);
   const [isEditNameModalOpen, setIsEditNameModalOpen] = useState(false);
   const [serviceName, setServiceName] = useState<string>('Services');
@@ -392,10 +391,13 @@ const Dashboard: React.FC = () => {
     }
   }, [connected]);
 
-  // Replace debouncedFetchClients with simpler version
+  // Replace debouncedFetchClients with more robust version
   const debouncedFetchClients = useCallback(
     (() => {
       let timeoutId: NodeJS.Timeout;
+      let retryCount = 0;
+      const maxRetries = 3;
+
       return () => {
         if (timeoutId) {
           clearTimeout(timeoutId);
@@ -403,15 +405,19 @@ const Dashboard: React.FC = () => {
 
         timeoutId = setTimeout(async () => {
           try {
+            console.log('Fetching clients data...');
             const response = await fetch(`${getApiUrl()}/api/clients`, {
               headers: {
                 'X-Internal-Request': 'true'
               }
             });
+            
             if (!response.ok) {
-              throw new Error('Failed to fetch clients');
+              throw new Error(`Failed to fetch clients: ${response.status}`);
             }
+            
             const data = await response.json();
+            console.log('Received clients data:', data);
             
             const clientsWithStatus = data.map((client: Client) => {
               const previousClient = clients.find(c => c.hostname === client.hostname);
@@ -422,11 +428,17 @@ const Dashboard: React.FC = () => {
             setClients(sortedClients);
             setLoading(false);
             setError('');
-            setLastUpdate(Date.now());
+            retryCount = 0; // Reset retry count on success
           } catch (err) {
             console.error('Error fetching clients:', err);
-            setError('Failed to fetch clients');
-            setLoading(false);
+            if (retryCount < maxRetries) {
+              retryCount++;
+              console.log(`Retrying fetch (${retryCount}/${maxRetries})...`);
+              setTimeout(() => debouncedFetchClients(), 1000 * retryCount);
+            } else {
+              setError('Failed to fetch clients after multiple attempts');
+              setLoading(false);
+            }
           }
         }, 300);
       };
@@ -449,34 +461,42 @@ const Dashboard: React.FC = () => {
     socketRef.current = newSocket;
 
     return () => {
-      newSocket.disconnect();
+      if (newSocket) {
+        newSocket.disconnect();
+      }
     };
   }, []);
 
-  // Set up socket event listeners
+  // Simplify socket event listeners
   useEffect(() => {
     if (!socketRef.current) return;
 
     const socket = socketRef.current;
 
     socket.on('connect', () => {
+      console.log('Connected to server');
       setConnected(true);
+      // Initial data fetch on connection
       debouncedFetchClients();
+      fetchPingConfigs();
     });
 
     socket.on('disconnect', () => {
+      console.log('Disconnected from server');
       setConnected(false);
     });
 
     socket.on('systemInfoUpdate', () => {
+      console.log('Received system info update');
       debouncedFetchClients();
     });
 
     socket.on('systemInfo', (data: any) => {
+      console.log('Received direct system info:', data);
       setClients(prevClients => {
         const index = prevClients.findIndex(c => c.hostname === data.hostname);
         if (index === -1) {
-          return [...prevClients, { ...data, lastSeen: new Date().toISOString() }];
+          return sortClients([...prevClients, { ...data, lastSeen: new Date().toISOString() }]);
         }
         const newClients = [...prevClients];
         newClients[index] = { ...newClients[index], ...data, lastSeen: new Date().toISOString() };
@@ -484,25 +504,23 @@ const Dashboard: React.FC = () => {
       });
     });
 
+    // Initial data fetch
+    debouncedFetchClients();
+    fetchPingConfigs();
+
     return () => {
       socket.off('connect');
       socket.off('disconnect');
       socket.off('systemInfoUpdate');
       socket.off('systemInfo');
     };
-  }, [debouncedFetchClients, sortClients]);
+  }, [debouncedFetchClients, fetchPingConfigs, sortClients]);
 
-  // Fetch initial data and set up ping config updates
+  // Keep only the ping config update interval
   useEffect(() => {
-    debouncedFetchClients();
-    fetchPingConfigs();
-
     const configInterval = setInterval(fetchPingConfigs, 30000);
-
-    return () => {
-      clearInterval(configInterval);
-    };
-  }, [debouncedFetchClients, fetchPingConfigs]);
+    return () => clearInterval(configInterval);
+  }, [fetchPingConfigs]);
 
   // Handle client selection
   const handleClientSelect = useCallback((client: Client) => {
@@ -530,24 +548,6 @@ const Dashboard: React.FC = () => {
   const memoizedClients = useMemo(() => {
     return clients;
   }, [clients]);
-
-  useEffect(() => {
-    if (connected) {
-      debouncedFetchClients();
-    }
-  }, [connected, debouncedFetchClients]);
-
-  // Add data update interval check
-  useEffect(() => {
-    const now = Date.now();
-    if (connected && now - lastUpdate > 10000) {
-      debouncedFetchClients();
-    }
-  }, [connected, lastUpdate, debouncedFetchClients]);
-
-  useEffect(() => {
-    fetchPingConfigs();
-  }, [fetchPingConfigs]);
 
   const handleDetailModalClose = () => {
     setIsDetailModalClosing(true);
